@@ -1,0 +1,23 @@
+# Prof. Postmark - Async Email Feedback System
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+python-dotenv==1.0.0
+aiofiles==23.2.1
+openai>=1.83.0
+requests==2.31.0
+
+# HTML parsing for email content
+beautifulsoup4==4.12.2
+mistune==3.0.2
+
+# Image processing and annotation
+Pillow==11.2.1
+numpy==2.2.6
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Compatibility fix for FastAPI
+anyio>=3.7.1,<4.0.0 
