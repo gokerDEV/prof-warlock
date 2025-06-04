@@ -10,8 +10,7 @@ from typing import List, Optional, Dict, Any
 
 @dataclass
 class EmailAttachment:
-    """Represents an email attachment."""
-    
+    """Represents an email attachment (kept for possible future use, but not used in Prof. Warlock)."""
     name: str
     content_type: str
     content_length: int
@@ -21,8 +20,7 @@ class EmailAttachment:
 
 @dataclass
 class IncomingEmail:
-    """Represents an incoming email message."""
-    
+    """Represents an incoming email message for Prof. Warlock."""
     from_email: str
     from_name: str
     subject: str
@@ -39,38 +37,6 @@ class IncomingEmail:
     def is_ping_request(self) -> bool:
         """Check if this is a PING health check request."""
         return "ping" in self.subject.lower() or "ping" in self.body.lower()
-
-
-@dataclass
-class ProcessedImage:
-    """Represents a processed image with metadata and scaled content."""
-    
-    image_path: str
-    width: int
-    height: int
-    original_filename: str
-    content_type: str
-    scaled_content: Optional[bytes] = None  # Scaled image content
-    
-    @property
-    def is_square(self) -> bool:
-        """Check if image is approximately square."""
-        aspect_ratio = self.width / self.height
-        return 0.95 <= aspect_ratio <= 1.05
-
-
-@dataclass
-class AIAnalysisResult:
-    """Result of AI analysis on submitted content."""
-    
-    feedback_text: str
-    annotated_image: Optional[bytes] = None
-    analysis_type: str = "text"  # "text", "image", "image_with_annotation"
-    
-    @property
-    def has_annotation(self) -> bool:
-        """Check if result includes an annotated image."""
-        return self.annotated_image is not None
 
 
 @dataclass

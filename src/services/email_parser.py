@@ -50,29 +50,37 @@ class EmailParsingService:
     @staticmethod
     def _extract_clean_body(webhook_data: Dict[str, Any]) -> str:
         """Extract and clean email body text."""
-        # Try HTML first, then fallback to text
-        html_body = webhook_data.get('HtmlBody', '')
+        # Try text first (preserves line breaks), then fallback to HTML
         text_body = webhook_data.get('TextBody', '')
+        html_body = webhook_data.get('HtmlBody', '')
+        
+        if text_body:
+            return text_body.strip()
         
         if html_body:
             return EmailParsingService._clean_html_content(html_body)
         
-        return text_body.strip()
+        return ""
     
     @staticmethod
     def _clean_html_content(html_content: str) -> str:
-        """Clean HTML content and extract readable text."""
+        """Clean HTML content and extract readable text while preserving line structure."""
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             # Remove script and style elements
             for script in soup(["script", "style"]):
                 script.decompose()
             
-            # Get text and clean whitespace
+            # Get text and preserve line breaks
             text = soup.get_text()
-            lines = (line.strip() for line in text.splitlines())
-            chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-            return ' '.join(chunk for chunk in chunks if chunk)
+            # Clean up excessive whitespace but preserve line breaks
+            lines = []
+            for line in text.splitlines():
+                cleaned_line = ' '.join(line.split())  # Clean internal whitespace
+                if cleaned_line:  # Only keep non-empty lines
+                    lines.append(cleaned_line)
+            
+            return '\n'.join(lines)
             
         except Exception:
             # Fallback: return HTML as-is if parsing fails

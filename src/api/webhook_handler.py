@@ -6,13 +6,16 @@ Orchestrates the complete email-to-AI-to-email workflow.
 
 import logging
 from typing import Dict, Any
+import json
+import time
+import os
 
 from ..core.domain_models import IncomingEmail
+from ..services.natal_chart_service import NatalChartService
 from ..services.email_parser import EmailParsingService
 from ..services.validation_service import ValidationService
-from ..services.image_processor import ImageProcessingService
-from ..services.ai_analysis_service import AIAnalysisService
 from ..services.email_service import EmailService
+from ..core.configuration import config
 
 
 logger = logging.getLogger(__name__)
@@ -24,8 +27,7 @@ class WebhookHandler:
     def __init__(self):
         self.email_parser = EmailParsingService()
         self.validator = ValidationService()
-        self.image_processor = ImageProcessingService()
-        self.ai_service = AIAnalysisService()
+        self.natal_chart_service = NatalChartService()
         self.email_service = EmailService()
     
     async def process_webhook(self, webhook_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -38,6 +40,19 @@ class WebhookHandler:
         Returns:
             Dict: Processing result with status and details
         """
+        # Save inbound email for debugging/testing (configurable)
+        if config.save_inbound_emails:
+            try:
+                os.makedirs("inbound_emails", exist_ok=True)
+                sender = webhook_data.get('From', 'unknown').replace('@', '_').replace('.', '_')
+                timestamp = int(time.time())
+                filename = f"inbound_emails/{timestamp}_{sender}.json"
+                with open(filename, "w") as f:
+                    json.dump(webhook_data, f, indent=2)
+                logger.info(f"Saved inbound email: {filename}")
+            except Exception as e:
+                logger.error(f"Failed to save inbound email: {e}")
+        
         try:
             # Parse incoming email
             email = self.email_parser.parse_webhook_data(webhook_data)
@@ -87,56 +102,46 @@ class WebhookHandler:
         }
     
     async def _process_submission(self, email: IncomingEmail) -> Dict[str, Any]:
-        """Process a valid submission with AI analysis."""
+        """Process a valid submission for natal chart generation."""
         try:
-            # Get the first attachment (assuming single file submissions)
-            attachment = email.attachments[0]
-            logger.info(f"📎 Processing attachment: {attachment.name}")
-            
-            # Check if it's an image
-            if attachment.content_type in ['image/jpeg', 'image/png', 'image/jpg']:
-                # Process image
-                processed_image = self.image_processor.process_image_attachment(attachment)
-                logger.info(f"🖼️ Image processed: {processed_image.width}x{processed_image.height}")
-                
-                # Analyze with AI
-                analysis_result = self.ai_service.analyze_submission(email, processed_image)
-            else:
-                # Text-only analysis
-                analysis_result = self.ai_service.analyze_submission(email)
-            
-            logger.info(f"🧠 AI analysis completed: {analysis_result.analysis_type}")
-            
-            # Send feedback response with annotated image if available
-            success = self.email_service.send_feedback_response(
-                email, 
-                analysis_result.feedback_text,
-                analysis_result.annotated_image
+            # Extract user info from email body
+            user_info = self.natal_chart_service.parse_user_info(email.body)
+            # Generate natal chart
+            chart_bytes = self.natal_chart_service.generate_chart(user_info)
+            # Send chart as attachment
+            subject = "[Prof. Warlock] Your Natal Chart"
+            content = f"Dear {user_info['First Name']}, your natal chart is ready! (Poster attached)"
+            from src.core.domain_models import EmailAttachment
+            attachment = EmailAttachment(
+                name="natal_chart.png",
+                content_type="image/png",
+                content_length=len(chart_bytes),
+                content=chart_bytes
             )
-            
+            from src.core.domain_models import EmailResponse
+            response = EmailResponse(
+                to_email=email.from_email,
+                subject=subject,
+                content=content,
+                reply_to_message_id=email.message_id,
+                attachments=[attachment]
+            )
+            success = self.email_service.send_response(response)
             if success:
-                logger.info(f"📬 Feedback sent successfully to {email.from_email}")
                 return {
                     "status": "success",
-                    "action": "feedback_sent",
-                    "analysis_type": analysis_result.analysis_type,
-                    "file_processed": attachment.name,
-                    "has_annotation": analysis_result.has_annotation
+                    "action": "natal_chart_sent",
+                    "file_processed": "natal_chart.png"
                 }
             else:
-                logger.error(f"❌ Failed to send feedback to {email.from_email}")
                 return {
                     "status": "error",
-                    "message": "Failed to send feedback email"
+                    "message": "Failed to send natal chart email"
                 }
-                
         except Exception as e:
             logger.error(f"💥 Submission processing error: {str(e)}")
-            
-            # Send fallback response
             fallback_message = self._create_fallback_message(email, str(e))
             success = self.email_service.send_feedback_response(email, fallback_message)
-            
             return {
                 "status": "partial_success" if success else "error",
                 "action": "fallback_sent" if success else "processing_failed",
@@ -152,6 +157,6 @@ class WebhookHandler:
 Thank you for your submission. I've received your file but encountered a technical issue while analyzing it. Please try resubmitting, or contact me if the problem persists.
 
 Best regards,
-Prof. Postmark
+Prof. Warlock
 
 (Technical details: {error_msg[:100]}...)""" 

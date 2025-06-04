@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Prof. Postmark",
-    description="Async Email Feedback System with AI Analysis",
-    version="2.0.0",
+    title="Prof. Warlock",
+    description="Natal Chart Poster Generator via Email",
+    version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -55,7 +55,7 @@ def verify_webhook_token(token: Optional[str] = Query(None)) -> str:
 async def health_check():
     """Basic health check endpoint."""
     return {
-        "message": "Prof. Postmark is running!",
+        "message": "Prof. Warlock is running!",
         "status": "healthy",
         "version": "2.0.0"
     }
@@ -66,14 +66,11 @@ async def detailed_health_check():
     """Detailed health check with system information."""
     return {
         "status": "healthy",
-        "service": "Prof. Postmark",
-        "version": "2.0.0",
-        "ai_model": config.ai_service.VISION_MODEL_NAME,
+        "service": "Prof. Warlock",
+        "version": "1.0.0",
         "features": [
             "email_parsing",
-            "ai_analysis", 
             "image_processing",
-            "webhook_security",
             "personalized_responses"
         ]
     }
@@ -91,9 +88,8 @@ async def process_email_webhook(
     1. Security validation (webhook token)
     2. Email parsing and cleaning
     3. PING/PONG health check handling
-    4. Attachment validation (size, type)
-    5. AI analysis (GPT-4o with vision)
-    6. Personalized email response
+    4. Natal chart generation    
+    5. Personalized email response
     
     Security: Requires valid token parameter for authentication.
     Usage: POST /webhook?token=your-secret-token

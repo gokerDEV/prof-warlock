@@ -4,7 +4,6 @@ uvicorn==0.24.0
 python-multipart==0.0.6
 python-dotenv==1.0.0
 aiofiles==23.2.1
-openai>=1.83.0
 requests==2.31.0
 
 # HTML parsing for email content
@@ -20,4 +19,16 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 
 # Compatibility fix for FastAPI
-anyio>=3.7.1,<4.0.0 
+anyio>=3.7.1,<4.0.0
+
+# Official Postmark API integration
+python-postmark==0.4.7
+
+# Natal library
+natal==0.9.3
+
+# Geocoding
+geopy==2.4.1
+
+# SVG to PNG conversion
+cairosvg==2.7.1

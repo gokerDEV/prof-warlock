@@ -86,7 +86,7 @@ class EmailService:
         
         response = EmailResponse(
             to_email=email.from_email,
-            subject="[Prof. Postmark] Feedback for your submission",
+            subject="[Prof. Warlock] Feedback for your submission",
             content=html_content,
             reply_to_message_id=email.message_id
         )
@@ -109,7 +109,7 @@ class EmailService:
     def _build_email_payload(self, response: EmailResponse) -> Dict:
         """Build the Postmark API payload."""
         payload = {
-            "From": self.from_email,
+            "From": f"Prof. Warlock <{self.from_email}>",  # Include sender name
             "To": response.to_email,
             "Subject": response.subject,
             "HtmlBody": response.content,
@@ -137,60 +137,39 @@ class EmailService:
         return payload
     
     def _create_error_message(self, from_name: str, error: ValidationError) -> str:
-        """Create a personalized error message."""
+        """Create a personalized error message with proper HTML formatting."""
         first_name = self._extract_first_name(from_name)
         
         error_messages = {
-            "no_attachment": f"""Dear {first_name},
+            "missing_user_info": f"""<p>Dear {first_name},</p>
 
-Thank you for your email. I notice you didn't include any attachments. Please attach your work and resend your message.
+<p>Some information is missing. Please reply using the format:</p>
+<p>
+First Name: ...<br>
+Last Name: ...<br>
+Date of Birth: ...<br>
+Place of Birth: ...
+</p>
 
-Looking forward to reviewing your submission!
-
-Best regards,
-Prof. Postmark""",
-
-            "file_too_large": f"""Dear {first_name},
-
-Thank you for your submission. Your file exceeds our {config.file_validation.MAX_SIZE_MB}MB size limit. Please compress your file and resend.
-
-If you need help reducing file size, try:
-• Reducing image quality/resolution
-• Converting to JPEG format
-• Using online compression tools
-
-Best regards,
-Prof. Postmark""",
-
-            "invalid_file_type": f"""Dear {first_name},
-
-Thank you for your submission. Please submit files in one of these formats:
-• JPEG (.jpg, .jpeg)
-• PNG (.png)
-
-Please convert your file and resend.
-
-Best regards,
-Prof. Postmark"""
+<p>Best regards,<br>
+Prof. Warlock</p>"""
         }
         
-        return error_messages.get(error.error_type, f"""Dear {first_name},
+        return error_messages.get(error.error_type, f"""<p>Dear {first_name},</p>
 
-Thank you for your submission. There was an issue processing your file: {error.message}
+<p>Thank you for your submission. There was an issue processing your request: {error.message}</p>
 
-Please check your file and try again.
+<p>Please check your submission and try again.</p>
 
-Best regards,
-Prof. Postmark""")
+<p>Best regards,<br>
+Prof. Warlock</p>""")
     
     def _create_error_subject(self, error_type: str) -> str:
         """Create appropriate subject line for error type."""
         subjects = {
-            "no_attachment": "[Prof. Postmark] Missing Attachment",
-            "file_too_large": "[Prof. Postmark] File Too Large", 
-            "invalid_file_type": "[Prof. Postmark] Invalid File Type"
+            "missing_user_info": "[Prof. Warlock] Missing Information"
         }
-        return subjects.get(error_type, "[Prof. Postmark] Submission Error")
+        return subjects.get(error_type, "[Prof. Warlock] Submission Error")
     
     def _markdown_to_html(self, markdown_text: str) -> str:
         """Convert markdown to HTML for email display using mistune with table support."""

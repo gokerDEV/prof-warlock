@@ -1,3 +1,8 @@
+# Environment variables
+.env
+*.env
+!env.example
+
 # Python
 __pycache__/
 *.py[cod]
@@ -19,35 +24,60 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Virtual environment
+# Virtual environments
 venv/
-env/
 ENV/
-
-# Environment variables
-.env
-.env.*
+env/
+.venv/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# OS
-.DS_Store
-Thumbs.db
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
 
 # Logs
 *.log
+logs/
 
-# Test results
+# Test outputs
 test_results/
+test_chart.png
+test_natal_chart.png
+natal_chart_test.png
 
-# Pytest cache
-.pytest_cache/
+# Inbound emails (development)
+inbound_emails/
 
-# Coverage
-.coverage
-htmlcov/ 
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp 
