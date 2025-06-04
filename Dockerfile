@@ -3,13 +3,18 @@ FROM python:3.13-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies including build tools for C extensions
+# Install system dependencies including build tools for C extensions and Cairo
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
     g++ \
     pkg-config \
     curl \
+    libcairo2-dev \
+    libcairo2 \
+    libcairo-gobject2 \
+    libffi-dev \
+    shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
