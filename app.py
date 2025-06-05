@@ -1,5 +1,5 @@
 """
-Prof. Postmark Application Entry Point
+Prof. Warlock Application Entry Point
 
 Clean entry point for running the FastAPI application.
 """
