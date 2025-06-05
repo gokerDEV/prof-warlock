@@ -32,3 +32,7 @@ geopy==2.4.1
 
 # SVG to PNG conversion
 cairosvg==2.7.1
+
+# Transformer-based parsing
+transformers==4.36.2
+torch==2.1.2

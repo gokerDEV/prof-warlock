@@ -18,6 +18,7 @@ Prof. Warlock is an innovative email-first application that generates beautiful 
 - **🔒 Privacy-Focused**: No data storage, immediate processing
 - **📍 Geocoding Integration**: Automatic location coordinate lookup
 - **💌 Smart Validation**: Helpful error messages for missing information
+- **🤖 Transformer-Based Parsing**: BERT-powered email understanding
 
 ## 🔄 User Flow
 

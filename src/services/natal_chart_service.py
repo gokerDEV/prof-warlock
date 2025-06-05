@@ -5,7 +5,9 @@ Parses user info and generates natal charts using the natal library.
 """
 
 import re
+import logging
 from typing import Dict
+from transformers import pipeline
 from natal.chart import Chart
 from io import BytesIO
 from geopy.geocoders import Nominatim
@@ -16,21 +18,58 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 from natal.config import Config
 
+
 class NatalChartService:
+    _qa_pipeline = None
+
+    @staticmethod
+    def _get_qa_pipeline():
+        """Lazily load the HuggingFace QA pipeline."""
+        if NatalChartService._qa_pipeline is None:
+            NatalChartService._qa_pipeline = pipeline(
+                "question-answering",
+                model="distilbert-base-uncased-distilled-squad",
+            )
+        return NatalChartService._qa_pipeline
+    @staticmethod
+    def _parse_with_transformers(body: str) -> Dict[str, str]:
+        """Attempt to extract user info using a transformers QA model."""
+        qa = NatalChartService._get_qa_pipeline()
+        questions = {
+            "First Name": "What is the first name?",
+            "Last Name": "What is the last name?",
+            "Date of Birth": "What is the date of birth?",
+            "Place of Birth": "Where was the person born?",
+        }
+        answers = {}
+        for key, question in questions.items():
+            try:
+                result = qa(question=question, context=body)
+                answers[key] = result.get("answer", "").strip()
+            except Exception as e:
+                logging.warning(f"Transformers parsing failed for {key}: {e}")
+        return answers
+
     @staticmethod
     def parse_user_info(body: str) -> Dict[str, str]:
-        """Parse user info from email body in strict format."""
-        # First try the original multiline pattern
-        pattern = re.compile(r"^([A-Za-z ]+):\s*(.+)$", re.MULTILINE)
-        matches = dict(pattern.findall(body))
-        
-        # If that didn't work (e.g., flattened email), try a more flexible pattern
-        if len(matches) < 4:  # We need at least 4 fields
-            # Look for field patterns anywhere in the text, not just at line starts
-            pattern = re.compile(r"([A-Za-z ]+):\s*([^:\n\r]+?)(?=\s*[A-Za-z ]+:|$)")
-            matches = dict(pattern.findall(body))
-        
+        """Parse user info from email body using transformers with regex fallback."""
+        matches = {}
+        try:
+            matches = NatalChartService._parse_with_transformers(body)
+        except Exception as e:
+            logging.warning(f"Transformers parser unavailable: {e}")
+
         required = ["First Name", "Last Name", "Date of Birth", "Place of Birth"]
+        if not all(matches.get(field) for field in required):
+            # First try the original multiline pattern
+            pattern = re.compile(r"^([A-Za-z ]+):\s*(.+)$", re.MULTILINE)
+            matches = dict(pattern.findall(body))
+
+            # If that didn't work (e.g., flattened email), try a more flexible pattern
+            if len(matches) < 4:
+                pattern = re.compile(r"([A-Za-z ]+):\s*([^:\n\r]+?)(?=\s*[A-Za-z ]+:|$)")
+                matches = dict(pattern.findall(body))
+        
         for field in required:
             if field not in matches:
                 raise ValueError(f"Missing required field: {field}")
