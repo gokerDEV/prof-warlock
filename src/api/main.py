@@ -9,8 +9,12 @@ from fastapi import FastAPI, HTTPException, Request, Query, Depends
 from fastapi.responses import JSONResponse
 from typing import Optional
 
+from .. import __version__
+
 from ..core.configuration import config
 from .webhook_handler import WebhookHandler
+
+APP_VERSION = __version__
 
 
 # Configure logging
@@ -21,7 +25,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Prof. Warlock",
     description="Natal Chart Poster Generator via Email",
-    version="1.0.0",
+    version=APP_VERSION,
     docs_url="/docs",
     redoc_url="/redoc"
 )
@@ -57,7 +61,7 @@ async def health_check():
     return {
         "message": "Prof. Warlock is running!",
         "status": "healthy",
-        "version": "2.0.0"
+        "version": APP_VERSION
     }
 
 
@@ -67,7 +71,7 @@ async def detailed_health_check():
     return {
         "status": "healthy",
         "service": "Prof. Warlock",
-        "version": "1.0.0",
+        "version": APP_VERSION,
         "features": [
             "email_parsing",
             "image_processing",
