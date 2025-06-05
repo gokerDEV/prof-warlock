@@ -14,7 +14,7 @@ def test_parse_email_with_user_info():
     body = (
         "First Name: Jane\n"
         "Last Name: Doe\n"
-        "Date of Birth: 15-06-1985\n"
+        "Date of Birth: 15-06-1985 12:10\n"
         "Place of Birth: San Francisco, California, USA\n"
     )
     webhook_data = {
@@ -42,7 +42,7 @@ def test_validate_user_info_completeness():
     body = (
         "First Name: Jane\n"
         "Last Name: Doe\n"
-        "Date of Birth: 15-06-1985\n"
+        "Date of Birth: 15-06-1985 08:30\n"
         "Place of Birth: San Francisco, California, USA\n"
     )
     email = DummyEmail(body)
@@ -51,7 +51,7 @@ def test_validate_user_info_completeness():
     # Missing info
     incomplete_body = (
         "First Name: Jane\n"
-        "Date of Birth: 15-06-1985\n"
+        "Date of Birth: 15-06-1985 08:30\n"
     )
     email = DummyEmail(incomplete_body)
     error = ValidationService.validate_email_for_processing(email)
@@ -62,7 +62,7 @@ def test_natal_chart_creation():
     user_info = {
         "First Name": "Jane",
         "Last Name": "Doe",
-        "Date of Birth": "15-06-1985",
+        "Date of Birth": "15-06-1985 14:30",
         "Place of Birth": "San Francisco, California, USA"
     }
     chart_bytes = NatalChartService.generate_chart(user_info)
@@ -137,7 +137,7 @@ create a natal chart
 
 First Name: John
 Last Name: Doe  
-Date of Birth: 15-08-1985
+Date of Birth: 15-08-1985 11:50
 Place of Birth: New York, NY, USA
 
 -- 
@@ -157,7 +157,7 @@ Best regards""",
     user_info = NatalChartService.parse_user_info(email.body)
     assert user_info["First Name"] == "John"
     assert user_info["Last Name"] == "Doe"
-    assert user_info["Date of Birth"] == "15-08-1985"
+    assert user_info["Date of Birth"] == "15-08-1985 11:50"
     assert user_info["Place of Birth"] == "New York, NY, USA"
 
 def test_end_to_end_natal_chart_with_mock():
@@ -169,7 +169,7 @@ def test_end_to_end_natal_chart_with_mock():
         'Subject': 'natal chart request',
         'TextBody': """First Name: Alice
 Last Name: Smith
-Date of Birth: 15-03-1985
+Date of Birth: 15-03-1985 12:10
 Place of Birth: London, UK
 
 Please create my natal chart. Thank you!""",
@@ -184,7 +184,7 @@ Please create my natal chart. Thank you!""",
     user_info = NatalChartService.parse_user_info(email.body)
     assert user_info["First Name"] == "Alice"
     assert user_info["Last Name"] == "Smith"
-    assert user_info["Date of Birth"] == "15-03-1985"
+    assert user_info["Date of Birth"] == "15-03-1985 12:10"
     assert user_info["Place of Birth"] == "London, UK"
     
     # Generate natal chart

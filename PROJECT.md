@@ -72,7 +72,7 @@ Users must provide birth information in this exact format:
 ```
 First Name: John
 Last Name: Doe
-Date of Birth: 15-06-1985
+Date of Birth: 15-06-1985 08:30
 Place of Birth: New York, NY
 ```
 

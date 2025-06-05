@@ -30,7 +30,7 @@ Subject: Natal Chart Request
 
 First Name: John
 Last Name: Doe
-Date of Birth: 15-05-1990
+Date of Birth: 15-05-1990 08:30
 Place of Birth: New York, NY
 ```
 
@@ -57,7 +57,7 @@ Dear John,
 Some information is missing. Please reply using the format:
 First Name: ...
 Last Name: ...
-Date of Birth: ...
+Date of Birth: DD-MM-YYYY HH:MM
 Place of Birth: ...
 
 Best regards,
@@ -180,82 +180,3 @@ python -m pytest src/tests/test_system.py::test_natal_chart_creation -v
 # With output
 python -m pytest src/tests/ -v -s
 ```
-
-### Test Coverage
-
-- ✅ Email parsing and validation
-- ✅ User information extraction
-- ✅ Natal chart generation
-- ✅ Health check endpoints
-- ✅ Webhook ping/pong
-- ✅ End-to-end workflow with real data
-
-## 📁 Project Structure
-
-```
-prof-warlock/
-├── src/
-│   ├── api/
-│   │   ├── main.py              # FastAPI application
-│   │   └── webhook_handler.py   # Webhook processing logic
-│   ├── core/
-│   │   ├── configuration.py     # Environment configuration
-│   │   └── domain_models.py     # Data models
-│   └── services/
-│       ├── email_parser.py      # Email content parsing
-│       ├── email_service.py     # Email sending logic
-│       ├── natal_chart_service.py # Chart generation
-│       └── validation_service.py # Input validation
-├── assets/fonts/static/         # Montserrat fonts
-├── tests/                       # Test suite
-├── requirements.txt             # Python dependencies
-├── render.yaml                  # Render.com deployment config
-├── Procfile                     # Process configuration
-└── README.md                    # This file
-```
-
-## 🎯 About the Postmark Challenge
-
-This project was created for the [Postmark Challenge: Inbox Innovators](https://postmarkapp.com/blog/announcing-the-postmark-challenge-inbox-innovators), which challenged developers to build innovative applications using Postmark's inbound email processing capabilities.
-
-**Challenge Goals:**
-- 💡 Reimagine email as an interactive application interface
-- 🔧 Showcase the power of inbound email processing
-- 🚀 Build something unique and useful
-
-Prof. Warlock demonstrates how email can become a powerful user interface for specialized services, eliminating the need for traditional web forms while providing a delightful user experience.
-
-## 🛠️ Technical Stack
-
-- **Backend**: FastAPI (Python)
-- **Email Processing**: Postmark Inbound API
-- **Astrology**: `natal` library for chart generation
-- **Graphics**: PIL (Pillow) for poster composition
-- **Geocoding**: `geopy` for location lookup
-- **Fonts**: Montserrat (Google Fonts)
-- **Deployment**: Render.com
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the project
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🌟 Acknowledgments
-
-- [Postmark](https://postmarkapp.com) for excellent inbound email processing
-- [DEV.to](https://dev.to) for hosting the Inbox Innovators challenge
-- The `natal` library for astrological calculations
-- Google Fonts for the beautiful Montserrat typeface
-
----
-
-Made with ✨ for the Postmark Challenge: Inbox Innovators

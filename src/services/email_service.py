@@ -147,7 +147,7 @@ class EmailService:
 <p>
 First Name: ...<br>
 Last Name: ...<br>
-Date of Birth: ...<br>
+Date of Birth: DD-MM-YYYY HH:MM<br>
 Place of Birth: ...
 </p>
 

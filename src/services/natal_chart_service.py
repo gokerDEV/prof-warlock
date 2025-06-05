@@ -61,7 +61,7 @@ class NatalChartService:
             dt = datetime.strptime(date_str, "%d-%m-%Y %H:%M")
             dt_str = dt.strftime("%Y-%m-%d %H:%M")
         except Exception:
-            raise ValueError("Date of Birth must be in DD-MM-YYYY format")
+            raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
 
         # Use monochrome config for the chart
         mono_config = Config(theme_type="mono")
