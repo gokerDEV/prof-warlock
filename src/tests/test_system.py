@@ -8,6 +8,7 @@ from src.api.main import app
 from src.core.configuration import config
 import json
 import re
+from unittest.mock import patch
 
 def test_parse_email_with_user_info():
     # Strict input format, no image, just user info
@@ -187,8 +188,14 @@ Please create my natal chart. Thank you!""",
     assert user_info["Date of Birth"] == "15-03-1985 12:10"
     assert user_info["Place of Birth"] == "London, UK"
     
-    # Generate natal chart
-    chart_bytes = NatalChartService.generate_chart(user_info)
+    # Generate natal chart using mocked geocoding to avoid network access
+    with patch("geopy.geocoders.Nominatim.geocode") as mock_geocode:
+        mock_geocode.return_value = type(
+            "Location",
+            (),
+            {"latitude": 51.5074, "longitude": -0.1278},
+        )()
+        chart_bytes = NatalChartService.generate_chart(user_info)
     assert len(chart_bytes) > 0
     assert isinstance(chart_bytes, bytes)
     assert chart_bytes[:8] == b'\x89PNG\r\n\x1a\n'  # PNG file signature
