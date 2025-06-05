@@ -1,4 +1,4 @@
-# Prof. Postmark - Async Email Feedback System
+# Prof. Warlock - Async Email Feedback System
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6

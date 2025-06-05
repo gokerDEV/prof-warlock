@@ -1,5 +1,5 @@
 """
-Prof. Postmark - Async Email Feedback System
+Prof. Warlock - Async Email Feedback System
 
 A clean, modular email-based feedback system using AI.
 """
