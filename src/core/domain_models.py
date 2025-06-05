@@ -54,6 +54,18 @@ class EmailResponse:
             self.attachments = []
 
 
+@dataclass
+class ProcessedImage:
+    """Represents an image processed by the service."""
+
+    image_path: str
+    width: int
+    height: int
+    original_filename: str
+    content_type: str
+    scaled_content: bytes
+
+
 class ValidationError:
     """Represents a validation error with context."""
     
