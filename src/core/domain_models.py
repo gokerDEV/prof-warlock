@@ -1,5 +1,5 @@
 """
-Domain models for Prof. Postmark.
+Domain models for Prof. Warlock.
 
 Clean representation of core business entities.
 """

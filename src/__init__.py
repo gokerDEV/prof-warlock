@@ -1,8 +1,8 @@
 """
-Prof. Postmark - Async Email Feedback System
+Prof. Warlock - Natal Chart Generator via Email
 
-A clean, modular email-based feedback system using AI.
+A magical email-driven service that creates personalized natal chart posters.
 """
 
 __version__ = "2.0.0"
-__author__ = "Prof. Postmark Team" 
+__author__ = "Prof. Warlock Team"

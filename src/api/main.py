@@ -1,5 +1,5 @@
 """
-FastAPI application for Prof. Postmark.
+FastAPI application for Prof. Warlock.
 
 Clean, focused API with proper error handling and security.
 """
