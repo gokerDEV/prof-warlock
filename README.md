@@ -180,3 +180,7 @@ python -m pytest src/tests/test_system.py::test_natal_chart_creation -v
 # With output
 python -m pytest src/tests/ -v -s
 ```
+
+Running the tests creates images like `test_results/natal_chart_test.png` and
+`test_end_to_end_chart.png` for manual inspection. These files are not tracked in
+version control.

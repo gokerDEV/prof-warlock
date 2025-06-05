@@ -65,6 +65,7 @@ test_results/
 test_chart.png
 test_natal_chart.png
 natal_chart_test.png
+test_end_to_end_chart.png
 
 # Inbound emails (development)
 inbound_emails/
@@ -80,4 +81,4 @@ Thumbs.db
 
 # Temporary files
 *.tmp
-*.temp 
+*.temp
