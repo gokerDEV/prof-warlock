@@ -18,6 +18,7 @@ Prof. Warlock is an innovative email-first application that generates beautiful 
 - **🔒 Privacy-Focused**: No data storage, immediate processing
 - **📍 Geocoding Integration**: Automatic location coordinate lookup
 - **💌 Smart Validation**: Helpful error messages for missing information
+- **🤖 Transformer-Based Parsing**: BERT-powered email understanding
 
 ## 🔄 User Flow
 
@@ -181,6 +182,5 @@ python -m pytest src/tests/test_system.py::test_natal_chart_creation -v
 python -m pytest src/tests/ -v -s
 ```
 
-Running the tests creates images like `test_results/natal_chart_test.png` and
-`test_end_to_end_chart.png` for manual inspection. These files are not tracked in
-version control.
+- Running the tests creates images like `test_results/natal_chart_test.png`, `test_end_to_end_chart.png`, and `test_results/test_chart_generation.png` for manual inspection. These files are not tracked in version control.
+- The `test_chart_generation` test specifically saves its output to `test_results/test_chart_generation.png` for you to check the generated chart image.
