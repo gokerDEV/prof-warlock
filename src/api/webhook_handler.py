@@ -78,16 +78,21 @@ class WebhookHandler:
             }
     
     async def _handle_ping_request(self, email: IncomingEmail) -> Dict[str, Any]:
-        """Handle PING health check requests."""
-        logger.info(f"🏥 PING request from {email.from_email}")
-        
-        success = self.email_service.send_ping_response(email)
-        
-        return {
-            "status": "success" if success else "error",
-            "action": "pong_sent",
-            "message": "PONG response sent" if success else "Failed to send PONG"
-        }
+        """Handle a PING request by sending a PONG response."""
+        try:
+            self.email_service.send_ping_response(email)
+            return {
+                "status": "success",
+                "action": "pong_sent",
+                "message": "PONG response sent"
+            }
+        except Exception as e:
+            logger.error(f"Failed to send PONG response: {e}")
+            return {
+                "status": "error",
+                "action": "pong_failed",
+                "message": str(e)
+            }
     
     async def _handle_validation_error(self, email: IncomingEmail, error) -> Dict[str, Any]:
         """Handle validation errors by sending appropriate error responses."""

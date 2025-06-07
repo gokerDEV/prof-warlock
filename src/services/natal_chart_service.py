@@ -179,6 +179,9 @@ class NatalChartService:
         Try to parse a date string in any reasonable format and return as 'DD-MM-YYYY HH:MM'.
         Raise ValueError if parsing fails.
         """
+        if not date_str or date_str == "invalid-date":
+            raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
+            
         try:
             dt = date_parser.parse(date_str, dayfirst=True, fuzzy=True)
             return dt.strftime("%d-%m-%Y %H:%M")
@@ -186,38 +189,79 @@ class NatalChartService:
             raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
 
     @staticmethod
+    def _draw_rotated_text(draw: ImageDraw.ImageDraw, text: str, x: float, y: float, width: float, height: float, 
+                          angle: float, font: ImageFont.FreeTypeFont, fill: tuple) -> None:
+        """Helper function to draw rotated and centered text in a box."""
+        # Get text dimensions
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        
+        # Calculate center position
+        center_x = x + width / 2
+        center_y = y + height / 2
+        
+        # Create rotated image for text
+        txt_img = Image.new('RGBA', (int(width), int(height)), (255, 255, 255, 0))
+        txt_draw = ImageDraw.Draw(txt_img)
+        
+        # Draw text centered in the temporary image
+        text_x = (width - text_width) / 2
+        text_y = (height - text_height) / 2
+        txt_draw.text((text_x, text_y), text, font=font, fill=fill)
+        
+        # Rotate and paste
+        rotated_txt = txt_img.rotate(angle, expand=True, fillcolor=(0, 0, 0, 0))
+        
+        # Calculate paste position to maintain center point
+        paste_x = int(center_x - rotated_txt.width / 2)
+        paste_y = int(center_y - rotated_txt.height / 2)
+        
+        return rotated_txt, (paste_x, paste_y)
+
+    @staticmethod
     def generate_chart(user_info: Dict[str, str]) -> bytes:
         """Generate a natal chart PNG, corrected to pass tests and accept flexible date formats."""
+        # Validate date format first
+        date_str = user_info["Date of Birth"]
+        if not date_str or date_str == "invalid-date":
+            raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
+
+        # Handle case with no time provided as per original logic.
+        if len(date_str.strip().split()) == 1:
+            date_str += " 00:00"
+
+        # Use flexible date parsing
+        try:
+            date_str = NatalChartService._flexible_parse_date(date_str)
+            dt = datetime.strptime(date_str, "%d-%m-%Y %H:%M")
+            dt_str = dt.strftime("%Y-%m-%d %H:%M")
+        except Exception:
+            raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
+
+        # Validate and geocode location
         geolocator = Nominatim(user_agent="prof-warlock-test-suite")
         location = geolocator.geocode(user_info["Place of Birth"])
         if not location:
             raise ValueError(f"Could not geocode location: {user_info['Place of Birth']}")
         lat, lon = location.latitude, location.longitude
 
-        date_str = user_info["Date of Birth"]
-        # Handle case with no time provided as per original logic.
-        if len(date_str.strip().split()) == 1:
-            date_str += " 00:00"
-
-        # Use flexible date parsing
-        date_str = NatalChartService._flexible_parse_date(date_str)
-        dt = datetime.strptime(date_str, "%d-%m-%Y %H:%M")
-        dt_str = dt.strftime("%Y-%m-%d %H:%M")
-
-        # The rest of the function remains the same as it was functionally correct
-        # and its logic is being tested. Minor path adjustments for consistency.
+        # Setup paths and assets
         base_path = Path(__file__).resolve().parent
         assets_path = base_path / '../../assets'
+        font_dir = assets_path / 'fonts' / 'static'
 
+        # Get zodiac info and prepare images
         zodiac_sign, zodiac_path = NatalChartService._get_zodiac_sign(dt)
-        
-        zodiac_svg = cairosvg.svg2png(url=str(zodiac_path), output_width=400, output_height=400)
+        zodiac_svg = cairosvg.svg2png(url=str(zodiac_path), output_width=200, output_height=200)
         zodiac_img = Image.open(BytesIO(zodiac_svg)).convert("RGBA")
 
+        # Load template
         template_path = assets_path / 'template.svg'
         template_svg = cairosvg.svg2png(url=str(template_path), output_width=2480, output_height=3508)
         template_img = Image.open(BytesIO(template_svg)).convert("RGBA")
 
+        # Generate natal chart
         mono_config = Config(theme_type="mono")
         data = Data(
             name=f"{user_info.get('First Name', '')} {user_info.get('Last Name', '')}".strip(),
@@ -231,50 +275,89 @@ class NatalChartService:
         chart_png = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=2000, output_height=2000)
         chart_img = Image.open(BytesIO(chart_png)).convert("RGBA")
 
+        # Create canvas
         a3_width, a3_height = 2480, 3508
         canvas = Image.new("RGBA", (a3_width, a3_height), (255, 255, 255, 255))
         canvas.paste(template_img, (0, 0), template_img)
         
         draw = ImageDraw.Draw(canvas)
 
-        font_dir = assets_path / 'fonts' / 'static'
-        font_bold = ImageFont.truetype(str(font_dir / 'Montserrat-Bold.ttf'), 140)
-        font_regular = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 54)
+        # Load fonts
+        font_bold = ImageFont.truetype(str(font_dir / 'Montserrat-Bold.ttf'), 120)
+        font_regular = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 48)
         font_light = ImageFont.truetype(str(font_dir / 'Montserrat-Light.ttf'), 36)
-        
-        user_name = f"{user_info.get('First Name', '')} {user_info.get('Last Name', '')}".strip()
-        bbox = draw.textbbox((0, 0), user_name, font=font_bold)
-        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        draw.text(((a3_width-w)//2, 120), user_name, font=font_bold, fill=(10, 10, 10, 255))
 
+        # Draw coordinates
         latlon = f"{lat:.4f}, {lon:.4f}"
         bbox = draw.textbbox((0, 0), latlon, font=font_regular)
         w_latlon, h_latlon = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        draw.text(((a3_width - w_latlon) // 2, 150 + h + 20), latlon, font=font_regular, fill=(40, 40, 40, 255))
+        coord_y = 100
+        draw.text(((a3_width - w_latlon) // 2, coord_y), latlon, font=font_regular, fill=(40, 40, 40, 255))
 
-
-        chart_size = 2000
+        # Place main chart
+        chart_size = 2100
         chart_img = chart_img.resize((chart_size, chart_size), Image.LANCZOS)
-        canvas.paste(chart_img, ((a3_width - chart_size) // 2, 500), chart_img)
+        chart_y = coord_y + h_latlon + 60
+        canvas.paste(chart_img, ((a3_width - chart_size) // 2, chart_y), chart_img)
 
-        zodiac_size = 660
-        zodiac_img = zodiac_img.resize((zodiac_size, zodiac_size), Image.LANCZOS)
-        zodiac_x = (a3_width - zodiac_size) // 2
-        zodiac_y = 500 + chart_size + 80
-        canvas.paste(zodiac_img, (zodiac_x, zodiac_y), zodiac_img)
+        # Place sun sign at exact position
+        sun_sign_size = 200
+        sun_sign_img = zodiac_img.resize((sun_sign_size, sun_sign_size), Image.LANCZOS)
+        canvas.paste(sun_sign_img, (1840, 2560), sun_sign_img)
 
-        zodiac_font = ImageFont.truetype(str(font_dir / 'Montserrat-Bold.ttf'), 80)
-        bbox = draw.textbbox((0, 0), zodiac_sign, font=zodiac_font)
-        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        draw.text(((a3_width-w)//2, zodiac_y + zodiac_size + 20), zodiac_sign, font=zodiac_font, fill=(10, 10, 10, 255))
+        # Place moon sign at exact position (using same zodiac image for now)
+        moon_sign_img = zodiac_img.resize((sun_sign_size, sun_sign_size), Image.LANCZOS)
+        canvas.paste(moon_sign_img, (415, 2560), moon_sign_img)
 
+        # Draw birth info at exact positions
         bday = user_info["Date of Birth"]
-        draw.text((80, a3_height-220), bday, font=font_regular, fill=(30, 30, 30, 255))
-
         place = user_info["Place of Birth"]
-        bbox = draw.textbbox((0, 0), place, font=font_regular)
+
+        # Draw birth place in rotated box
+        birthplace_text = f"Birth place: {place}"
+        rotated_img, paste_pos = NatalChartService._draw_rotated_text(
+            draw, birthplace_text,
+            143.0928, 2645.6847,
+            602.7936, 83.4267,
+            315,
+            font_regular,
+            (30, 30, 30, 255)
+        )
+        canvas.paste(rotated_img, paste_pos, rotated_img)
+
+
+        # Draw birth date in rotated box
+        birthdate_text = f"Birth date: {bday}"
+        rotated_img, paste_pos = NatalChartService._draw_rotated_text(
+            draw, birthdate_text,
+            1845.0558, 2653.9451,
+            602.7936, 83.4267,
+            225,
+            font_regular,
+            (30, 30, 30, 255)
+        )
+        canvas.paste(rotated_img, paste_pos, rotated_img)
+
+        # Draw name centered at y=3090
+        user_name = f"{user_info.get('First Name', '')} {user_info.get('Last Name', '')}".strip()
+        bbox = draw.textbbox((0, 0), user_name, font=font_bold)
         w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        draw.text((a3_width-w-80, a3_height-220), place, font=font_regular, fill=(30, 30, 30, 255))
+        draw.text(((a3_width-w)//2, 3090), user_name, font=font_bold, fill=(10, 10, 10, 255))
+
+        # Draw moon sign name
+        moon_sign_text = zodiac_sign  # Using the zodiac sign as the moon sign name
+        bbox = draw.textbbox((0, 0), moon_sign_text, font=font_regular)
+        text_width = bbox[2] - bbox[0]
+        moon_x = 428.1203 + (198.667 - text_width) / 2
+        draw.text((moon_x, 2722.5959), moon_sign_text, font=font_regular, fill=(30, 30, 30, 255))
+
+        # Draw sun sign name
+        sun_sign_text = zodiac_sign
+        bbox = draw.textbbox((0, 0), sun_sign_text, font=font_regular)
+        text_width = bbox[2] - bbox[0]
+        sun_x = 1847.8485 + (198.667 - text_width) / 2
+        draw.text((sun_x, 2722.5959), sun_sign_text, font=font_regular, fill=(30, 30, 30, 255))
+
 
         buf = BytesIO()
         canvas.save(buf, format="PNG")
