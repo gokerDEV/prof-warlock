@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class AspectMatrixService:
-    CELL_SIZE = 80   # Fixed cell size 80x80
+    CELL_SIZE = 75   # Fixed cell size 80x80
     BORDER_COLOR = (0, 0, 0, 255)  # Black color for borders
     BORDER_WIDTH = 2  # Border width for visibility
     TOP = 2600
@@ -102,7 +102,7 @@ class AspectMatrixService:
         matrix_draw = ImageDraw.Draw(matrix_canvas)
 
         # Draw matrix cells and icons
-        for i in range(size):
+        for i in range(1,size):
             for j in range(i - 1):
                 x = (j + 1) * cell 
                 y = i * cell
@@ -122,7 +122,7 @@ class AspectMatrixService:
                         matrix_canvas.paste(rotated_sym, (px, py), rotated_sym)
 
         # Draw row labels (left side)
-        for i in range(size):
+        for i in range(2, size):
             x = 0
             y = i * cell
             matrix_draw.rectangle([x, y, x + cell, y + cell], 
@@ -139,7 +139,7 @@ class AspectMatrixService:
                     matrix_canvas.paste(rotated_label, (px, py), rotated_label)
 
         # Draw column labels (bottom)
-        for j in range(size):
+        for j in range(size-1):
             x = j * cell
             y = size * cell
             matrix_draw.rectangle([x, y, x + cell, y + cell], 
