@@ -18,7 +18,7 @@ import cairosvg
 from PIL import Image, ImageDraw, ImageFont
 import os
 from pathlib import Path
-from natal.config import Config
+from natal.config import Config, Chart as ChartConfig
 from dateutil import parser as date_parser
 import xml.etree.ElementTree as ET
 import math
@@ -282,14 +282,31 @@ class NatalChartService:
         template_svg = cairosvg.svg2png(bytestring=svg_content_hidden.encode('utf-8'), output_width=2480, output_height=3508)
         template_img = Image.open(BytesIO(template_svg)).convert("RGBA")
 
-        # Generate natal chart
-        mono_config = Config(theme_type="mono")
+        
+        config = Config(
+            chart=ChartConfig(stroke_width=1, ring_thickness_fraction=0.2)
+        )
+        # config.theme.stroke_width = 1
+        config.theme.background = "#fcf2de"
+        config.theme.foreground = "#393939"
+        config.theme.fire = "#393939"
+        config.theme.earth = "#393939"
+        config.theme.air = "#393939"
+        config.theme.water = "#393939"
+        config.theme.points = "#393939"
+        config.theme.asteroids = "#393939"
+        config.theme.positive = "#393939"
+        config.theme.negative = "#393939"
+        config.theme.others = "#393939"
+        config.theme.dim = "#393939"
+        config.theme.transparency = 0
+        
         data = Data(
             name=user_name,
             lat=lat,
             lon=lon,
             utc_dt=dt_str,
-            config=mono_config
+            config=config
         )
         chart = Chart(data, width=2000)
         svg_str = chart.svg
