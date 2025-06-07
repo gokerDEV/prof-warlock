@@ -258,6 +258,8 @@ class NatalChartService:
         base_path = Path(__file__).resolve().parent
         assets_path = base_path / '../../assets'
         font_dir = assets_path / 'fonts' / 'static'
+        font = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 48)
+        
 
         # Get zodiac sign images
         sun_sign_path = os.path.join(os.path.dirname(__file__), '../../assets/zodiac', f"{sun_sign.lower()}.svg")
@@ -302,15 +304,14 @@ class NatalChartService:
         # Place main chart
         chart_size = 2100
         chart_img = chart_img.resize((chart_size, chart_size), Image.LANCZOS)
-        coord_y = 100
-        font = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), font_size)
-        bbox = ImageDraw.Draw(canvas).textbbox((0, 0), f"{lat:.4f}, {lon:.4f}", font=font)
-        h_latlon = bbox[3] - bbox[1]
-        chart_y = coord_y + h_latlon + 60
-        canvas.paste(chart_img, ((a3_width - chart_size) // 2, chart_y), chart_img)
+        # coord_y = 100
+        # bbox = ImageDraw.Draw(canvas).textbbox((0, 0), f"{lat:.4f}, {lon:.4f}", font=font)
+        # h_latlon = bbox[3] - bbox[1]
+        # chart_y = coord_y + h_latlon + 60
+        canvas.paste(chart_img, (190, 190), chart_img)
 
         # Place zodiac signs
-        sign_size = 200
+        sign_size = 220
         sun_sign_img = sun_img.resize((sign_size, sign_size), Image.LANCZOS)
         moon_sign_img = moon_img.resize((sign_size, sign_size), Image.LANCZOS)
         
@@ -322,14 +323,6 @@ class NatalChartService:
         draw = ImageDraw.Draw(canvas)
 
         # Draw each text element individually
-        if 'name' in rects:
-            info = rects['name']
-            rotated, pos = NatalChartService._draw_rotated_text(
-                draw, user_name, info['center_x'] - info['width']/2, 
-                info['center_y'] - info['height']/2,
-                info['width'], info['height'], -info['rotation'], font, text_color
-            )
-            canvas.paste(rotated, pos, rotated)
 
         if 'birth_place' in rects:
             info = rects['birth_place']
@@ -351,6 +344,8 @@ class NatalChartService:
             )
             canvas.paste(rotated, pos, rotated)
 
+        font = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 24)
+
         if 'moon_sign_name' in rects:
             info = rects['moon_sign_name']
             rotated, pos = NatalChartService._draw_rotated_text(
@@ -366,6 +361,17 @@ class NatalChartService:
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw, sun_sign,
                 info['center_x'] - info['width']/2,
+                info['center_y'] - info['height']/2,
+                info['width'], info['height'], -info['rotation'], font, text_color
+            )
+            canvas.paste(rotated, pos, rotated)
+            
+        
+        font = ImageFont.truetype(str(font_dir / 'Montserrat-Bold.ttf'), 72)
+        if 'name' in rects:
+            info = rects['name']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw, user_name, info['center_x'] - info['width']/2, 
                 info['center_y'] - info['height']/2,
                 info['width'], info['height'], -info['rotation'], font, text_color
             )
