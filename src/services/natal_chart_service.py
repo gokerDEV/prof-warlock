@@ -23,6 +23,8 @@ from dateutil import parser as date_parser
 import xml.etree.ElementTree as ET
 import math
 from .zodiac_service import Zodiac
+from natal.stats import Stats
+from .aspect_matrix_service import AspectMatrixService
 
 
 class NatalChartService:
@@ -217,6 +219,12 @@ class NatalChartService:
         return rotated_txt, (paste_x, paste_y)
 
     @staticmethod
+    def _draw_aspect_matrix(draw, grid, center_x, center_y, assets_path):
+        """Draw aspect matrix in the center using SVG symbols."""
+        svg_paths_dir = os.path.join(assets_path, 'svg_paths')
+        AspectMatrixService.draw_aspect_matrix(draw, grid, center_x, center_y, svg_paths_dir)
+
+    @staticmethod
     def generate_chart(user_info: Dict[str, str], font_size: int = 48, text_color: tuple = (30, 30, 30, 255)) -> bytes:
         """Generate a natal chart PNG, corrected to pass tests and accept flexible date formats."""
         date_str = user_info["Date of Birth"]
@@ -284,9 +292,8 @@ class NatalChartService:
 
         
         config = Config(
-            chart=ChartConfig(stroke_width=1, ring_thickness_fraction=0.2)
+            chart=ChartConfig(stroke_width=1, ring_thickness_fraction=0.15)
         )
-        # config.theme.stroke_width = 1
         config.theme.background = "#fcf2de"
         config.theme.foreground = "#393939"
         config.theme.fire = "#393939"
@@ -308,11 +315,47 @@ class NatalChartService:
             utc_dt=dt_str,
             config=config
         )
-        chart = Chart(data, width=2000)
-        svg_str = chart.svg
-        chart_png = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=2000, output_height=2000)
-        chart_img = Image.open(BytesIO(chart_png)).convert("RGBA")
 
+        # Create transit data for aspect table
+        transit_data = Data(
+            name="Transit",
+            lat=lat,
+            lon=lon,
+            utc_dt=dt_str,
+            config=config
+        )
+
+        # Get the aspect cross reference table
+        stats = Stats(data1=data, data2=transit_data)
+        cross_ref_data = stats.cross_ref
+        grid = cross_ref_data.grid
+        
+        # Create chart
+        chart = Chart(
+            data1=data,
+            data2=transit_data,
+            width=2000
+        )
+        svg_str = chart.svg
+        
+        # Convert to PNG
+        chart_png = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=2000, output_height=2000)
+        
+        # Create base chart image
+        chart_img = Image.open(BytesIO(chart_png)).convert("RGBA")
+        draw = ImageDraw.Draw(chart_img)
+        
+        # Calculate center position for aspect matrix
+        w, h = chart_img.size
+        center_x = w // 2
+        center_y = h // 2
+        
+        
+        # Convert back to PNG for further processing
+        chart_buf = BytesIO()
+        chart_img.save(chart_buf, format="PNG")
+        chart_png = chart_buf.getvalue()
+        
         # Create canvas
         a3_width, a3_height = 2480, 3508
         canvas = Image.new("RGBA", (a3_width, a3_height), (255, 255, 255, 255))
@@ -320,12 +363,17 @@ class NatalChartService:
 
         # Place main chart
         chart_size = 2100
+        chart_img = Image.open(BytesIO(chart_png)).convert("RGBA")
         chart_img = chart_img.resize((chart_size, chart_size), Image.LANCZOS)
         # coord_y = 100
         # bbox = ImageDraw.Draw(canvas).textbbox((0, 0), f"{lat:.4f}, {lon:.4f}", font=font)
         # h_latlon = bbox[3] - bbox[1]
         # chart_y = coord_y + h_latlon + 60
         canvas.paste(chart_img, (190, 190), chart_img)
+
+        # Draw the aspect matrix in the center
+        svg_paths_dir = os.path.join(assets_path, 'svg_paths')
+        AspectMatrixService.draw_aspect_matrix(ImageDraw.Draw(canvas), grid, a3_width, svg_paths_dir)
 
         # Place zodiac signs
         sign_size = 220
