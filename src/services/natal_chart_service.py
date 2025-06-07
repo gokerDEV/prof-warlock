@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 from pathlib import Path
 from natal.config import Config
+from dateutil import parser as date_parser
 
 
 class NatalChartService:
@@ -42,7 +43,7 @@ class NatalChartService:
     def _parse_with_transformers(body: str) -> Dict[str, str]:
         """
         Parse user info from email body using transformers.
-        This version adheres to the specific logic expected by the tests.
+        This version now asks for time of birth separately and combines if both date and time are present.
         """
         qa_pipeline = NatalChartService._get_qa_pipeline()
         
@@ -50,7 +51,7 @@ class NatalChartService:
             "First Name": "What is the first name?",
             "Last Name": "What is the last name?",
             "Date of Birth": "What is the date of birth?",
-            # Test uses "Where was the person born?"
+            "Time of Birth": "What is the time of birth?",
             "Place of Birth": "Where was the person born?" 
         }
         
@@ -61,21 +62,21 @@ class NatalChartService:
                 answer = qa_pipeline(question=question, context=body)
                 if answer and answer.get("answer"):
                     value = answer["answer"].strip()
-                    
-                    # Restore specific logic required by tests
                     if field == "First Name":
                         value = value.split()[0]
-                    
                     if field == "Date of Birth":
                         if not any(char.isdigit() for char in value):
                             value = ""
-                    
-                    if value: # Only assign if there's a non-empty value
+                    if value:
                         results[field] = value
             except Exception as e:
                 logging.warning(f"Error extracting {field} with transformers: {e}")
                 continue
-        
+        # Combine date and time if both present
+        if results["Date of Birth"] and results["Time of Birth"]:
+            results["Date of Birth"] = f"{results['Date of Birth']} {results['Time of Birth']}"
+        # Remove Time of Birth from final dict (not expected downstream)
+        results.pop("Time of Birth", None)
         return results
 
     @staticmethod
@@ -173,8 +174,20 @@ class NatalChartService:
         return sign, sign_path
 
     @staticmethod
+    def _flexible_parse_date(date_str: str) -> str:
+        """
+        Try to parse a date string in any reasonable format and return as 'DD-MM-YYYY HH:MM'.
+        Raise ValueError if parsing fails.
+        """
+        try:
+            dt = date_parser.parse(date_str, dayfirst=True, fuzzy=True)
+            return dt.strftime("%d-%m-%Y %H:%M")
+        except Exception:
+            raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
+
+    @staticmethod
     def generate_chart(user_info: Dict[str, str]) -> bytes:
-        """Generate a natal chart PNG, corrected to pass tests."""
+        """Generate a natal chart PNG, corrected to pass tests and accept flexible date formats."""
         geolocator = Nominatim(user_agent="prof-warlock-test-suite")
         location = geolocator.geocode(user_info["Place of Birth"])
         if not location:
@@ -185,15 +198,11 @@ class NatalChartService:
         # Handle case with no time provided as per original logic.
         if len(date_str.strip().split()) == 1:
             date_str += " 00:00"
-        
-        dt = None
-        # The test requires a specific error message for a specific date format.
-        try:
-            dt = datetime.strptime(date_str, "%d-%m-%Y %H:%M")
-            dt_str = dt.strftime("%Y-%m-%d %H:%M")
-        except ValueError:
-            # This exact error message is required by `test_invalid_date_format`.
-             raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
+
+        # Use flexible date parsing
+        date_str = NatalChartService._flexible_parse_date(date_str)
+        dt = datetime.strptime(date_str, "%d-%m-%Y %H:%M")
+        dt_str = dt.strftime("%Y-%m-%d %H:%M")
 
         # The rest of the function remains the same as it was functionally correct
         # and its logic is being tested. Minor path adjustments for consistency.
