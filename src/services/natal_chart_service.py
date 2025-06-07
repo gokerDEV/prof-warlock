@@ -308,8 +308,8 @@ class NatalChartService:
         config.theme.dim = "#393939"
         config.theme.transparency = 0
         
-        data = Data(
-            name=user_name,
+        mimi = Data(
+            name='MiMi',
             lat=lat,
             lon=lon,
             utc_dt=dt_str,
@@ -317,7 +317,7 @@ class NatalChartService:
         )
 
         # Create transit data for aspect table
-        transit_data = Data(
+        transit = Data(
             name="Transit",
             lat=lat,
             lon=lon,
@@ -326,29 +326,30 @@ class NatalChartService:
         )
 
         # Get the aspect cross reference table
-        stats = Stats(data1=data, data2=transit_data)
+        stats = Stats(data1=mimi, data2=transit)
         cross_ref_data = stats.cross_ref
         grid = cross_ref_data.grid
         
         # Create chart
         chart = Chart(
-            data1=data,
-            data2=transit_data,
+            data1=mimi,
+            # data2=transit,
             width=2000
         )
         svg_str = chart.svg
         
         # Convert to PNG
-        chart_png = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=2000, output_height=2000)
+        chart_size = 2100
+        chart_png = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=chart_size, output_height=chart_size)
         
         # Create base chart image
         chart_img = Image.open(BytesIO(chart_png)).convert("RGBA")
         draw = ImageDraw.Draw(chart_img)
         
         # Calculate center position for aspect matrix
-        w, h = chart_img.size
-        center_x = w // 2
-        center_y = h // 2
+        # w, h = chart_img.size
+        # center_x = w // 2
+        # center_y = h // 2
         
         
         # Convert back to PNG for further processing
@@ -361,10 +362,10 @@ class NatalChartService:
         canvas = Image.new("RGBA", (a3_width, a3_height), (255, 255, 255, 255))
         canvas.paste(template_img, (0, 0), template_img)
 
-        # Place main chart
-        chart_size = 2100
-        chart_img = Image.open(BytesIO(chart_png)).convert("RGBA")
-        chart_img = chart_img.resize((chart_size, chart_size), Image.LANCZOS)
+        # # Place main chart
+        # chart_size = 2100
+        # chart_img = Image.open(BytesIO(chart_png)).convert("RGBA")
+        # chart_img = chart_img.resize((chart_size, chart_size), Image.LANCZOS)
         # coord_y = 100
         # bbox = ImageDraw.Draw(canvas).textbbox((0, 0), f"{lat:.4f}, {lon:.4f}", font=font)
         # h_latlon = bbox[3] - bbox[1]
