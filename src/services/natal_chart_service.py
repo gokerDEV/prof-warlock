@@ -20,6 +20,9 @@ import os
 from pathlib import Path
 from natal.config import Config
 from dateutil import parser as date_parser
+import xml.etree.ElementTree as ET
+import math
+from .zodiac_service import Zodiac
 
 
 class NatalChartService:
@@ -190,48 +193,39 @@ class NatalChartService:
 
     @staticmethod
     def _draw_rotated_text(draw: ImageDraw.ImageDraw, text: str, x: float, y: float, width: float, height: float, 
-                          angle: float, font: ImageFont.FreeTypeFont, fill: tuple) -> None:
+                          angle: float, font: ImageFont.FreeTypeFont, fill: tuple) -> Tuple[Image.Image, tuple]:
         """Helper function to draw rotated and centered text in a box."""
-        # Get text dimensions
         bbox = draw.textbbox((0, 0), text, font=font)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
         
-        # Calculate center position
         center_x = x + width / 2
         center_y = y + height / 2
         
-        # Create rotated image for text
         txt_img = Image.new('RGBA', (int(width), int(height)), (255, 255, 255, 0))
         txt_draw = ImageDraw.Draw(txt_img)
         
-        # Draw text centered in the temporary image
         text_x = (width - text_width) / 2
         text_y = (height - text_height) / 2
         txt_draw.text((text_x, text_y), text, font=font, fill=fill)
         
-        # Rotate and paste
         rotated_txt = txt_img.rotate(angle, expand=True, fillcolor=(0, 0, 0, 0))
         
-        # Calculate paste position to maintain center point
         paste_x = int(center_x - rotated_txt.width / 2)
         paste_y = int(center_y - rotated_txt.height / 2)
         
         return rotated_txt, (paste_x, paste_y)
 
     @staticmethod
-    def generate_chart(user_info: Dict[str, str]) -> bytes:
+    def generate_chart(user_info: Dict[str, str], font_size: int = 48, text_color: tuple = (30, 30, 30, 255)) -> bytes:
         """Generate a natal chart PNG, corrected to pass tests and accept flexible date formats."""
-        # Validate date format first
         date_str = user_info["Date of Birth"]
         if not date_str or date_str == "invalid-date":
             raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
 
-        # Handle case with no time provided as per original logic.
         if len(date_str.strip().split()) == 1:
             date_str += " 00:00"
 
-        # Use flexible date parsing
         try:
             date_str = NatalChartService._flexible_parse_date(date_str)
             dt = datetime.strptime(date_str, "%d-%m-%Y %H:%M")
@@ -239,32 +233,57 @@ class NatalChartService:
         except Exception:
             raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
 
-        # Validate and geocode location
         geolocator = Nominatim(user_agent="prof-warlock-test-suite")
         location = geolocator.geocode(user_info["Place of Birth"])
         if not location:
             raise ValueError(f"Could not geocode location: {user_info['Place of Birth']}")
         lat, lon = location.latitude, location.longitude
 
-        # Setup paths and assets
+        # Initialize Zodiac service
+        zodiac = Zodiac(
+            year=dt.year,
+            month=dt.month,
+            day=dt.day,
+            hour=dt.hour,
+            minute=dt.minute,
+            latitude=lat,
+            longitude=lon
+        )
+
+        # Get zodiac signs using the service
+        sun_sign = zodiac.get_sun_sign()
+        moon_sign = zodiac.get_lunar_sign()
+        ascendant_sign = zodiac.get_ascendant_sign()
+
         base_path = Path(__file__).resolve().parent
         assets_path = base_path / '../../assets'
         font_dir = assets_path / 'fonts' / 'static'
 
-        # Get zodiac info and prepare images
-        zodiac_sign, zodiac_path = NatalChartService._get_zodiac_sign(dt)
-        zodiac_svg = cairosvg.svg2png(url=str(zodiac_path), output_width=200, output_height=200)
-        zodiac_img = Image.open(BytesIO(zodiac_svg)).convert("RGBA")
+        # Get zodiac sign images
+        sun_sign_path = os.path.join(os.path.dirname(__file__), '../../assets/zodiac', f"{sun_sign.lower()}.svg")
+        moon_sign_path = os.path.join(os.path.dirname(__file__), '../../assets/zodiac', f"{moon_sign.lower()}.svg")
 
-        # Load template
+        sun_svg = cairosvg.svg2png(url=str(sun_sign_path), output_width=200, output_height=200)
+        moon_svg = cairosvg.svg2png(url=str(moon_sign_path), output_width=200, output_height=200)
+        
+        sun_img = Image.open(BytesIO(sun_svg)).convert("RGBA")
+        moon_img = Image.open(BytesIO(moon_svg)).convert("RGBA")
+
         template_path = assets_path / 'template.svg'
-        template_svg = cairosvg.svg2png(url=str(template_path), output_width=2480, output_height=3508)
+        with open(template_path, 'r') as f:
+            svg_content = f.read()
+
+        user_name = f"{user_info.get('First Name', '')} {user_info.get('Last Name', '')}".strip()
+
+        # Hide data group
+        svg_content_hidden = NatalChartService.hide_data_text_elements(svg_content)
+        template_svg = cairosvg.svg2png(bytestring=svg_content_hidden.encode('utf-8'), output_width=2480, output_height=3508)
         template_img = Image.open(BytesIO(template_svg)).convert("RGBA")
 
         # Generate natal chart
         mono_config = Config(theme_type="mono")
         data = Data(
-            name=f"{user_info.get('First Name', '')} {user_info.get('Last Name', '')}".strip(),
+            name=user_name,
             lat=lat,
             lon=lon,
             utc_dt=dt_str,
@@ -279,86 +298,157 @@ class NatalChartService:
         a3_width, a3_height = 2480, 3508
         canvas = Image.new("RGBA", (a3_width, a3_height), (255, 255, 255, 255))
         canvas.paste(template_img, (0, 0), template_img)
-        
-        draw = ImageDraw.Draw(canvas)
-
-        # Load fonts
-        font_bold = ImageFont.truetype(str(font_dir / 'Montserrat-Bold.ttf'), 120)
-        font_regular = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 48)
-        font_light = ImageFont.truetype(str(font_dir / 'Montserrat-Light.ttf'), 36)
-
-        # Draw coordinates
-        latlon = f"{lat:.4f}, {lon:.4f}"
-        bbox = draw.textbbox((0, 0), latlon, font=font_regular)
-        w_latlon, h_latlon = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        coord_y = 100
-        draw.text(((a3_width - w_latlon) // 2, coord_y), latlon, font=font_regular, fill=(40, 40, 40, 255))
 
         # Place main chart
         chart_size = 2100
         chart_img = chart_img.resize((chart_size, chart_size), Image.LANCZOS)
+        coord_y = 100
+        font = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), font_size)
+        bbox = ImageDraw.Draw(canvas).textbbox((0, 0), f"{lat:.4f}, {lon:.4f}", font=font)
+        h_latlon = bbox[3] - bbox[1]
         chart_y = coord_y + h_latlon + 60
         canvas.paste(chart_img, ((a3_width - chart_size) // 2, chart_y), chart_img)
 
-        # Place sun sign at exact position
-        sun_sign_size = 200
-        sun_sign_img = zodiac_img.resize((sun_sign_size, sun_sign_size), Image.LANCZOS)
+        # Place zodiac signs
+        sign_size = 200
+        sun_sign_img = sun_img.resize((sign_size, sign_size), Image.LANCZOS)
+        moon_sign_img = moon_img.resize((sign_size, sign_size), Image.LANCZOS)
+        
         canvas.paste(sun_sign_img, (1840, 2560), sun_sign_img)
-
-        # Place moon sign at exact position (using same zodiac image for now)
-        moon_sign_img = zodiac_img.resize((sun_sign_size, sun_sign_size), Image.LANCZOS)
         canvas.paste(moon_sign_img, (415, 2560), moon_sign_img)
 
-        # Draw birth info at exact positions
-        bday = user_info["Date of Birth"]
-        place = user_info["Place of Birth"]
+        # Get placeholder rectangles
+        rects = NatalChartService.get_placeholder_rects(svg_content, ['name', 'birth_place', 'birth_date', 'moon_sign_name', 'sun_sign_name'])
+        draw = ImageDraw.Draw(canvas)
 
-        # Draw birth place in rotated box
-        birthplace_text = f"Birth place: {place}"
-        rotated_img, paste_pos = NatalChartService._draw_rotated_text(
-            draw, birthplace_text,
-            143.0928, 2645.6847,
-            602.7936, 83.4267,
-            315,
-            font_regular,
-            (30, 30, 30, 255)
-        )
-        canvas.paste(rotated_img, paste_pos, rotated_img)
+        # Draw each text element individually
+        if 'name' in rects:
+            info = rects['name']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw, user_name, info['center_x'] - info['width']/2, 
+                info['center_y'] - info['height']/2,
+                info['width'], info['height'], -info['rotation'], font, text_color
+            )
+            canvas.paste(rotated, pos, rotated)
 
+        if 'birth_place' in rects:
+            info = rects['birth_place']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw, user_info["Place of Birth"], 
+                info['center_x'] - info['width']/2,
+                info['center_y'] - info['height']/2,
+                info['width'], info['height'], -info['rotation'], font, text_color
+            )
+            canvas.paste(rotated, pos, rotated)
 
-        # Draw birth date in rotated box
-        birthdate_text = f"Birth date: {bday}"
-        rotated_img, paste_pos = NatalChartService._draw_rotated_text(
-            draw, birthdate_text,
-            1845.0558, 2653.9451,
-            602.7936, 83.4267,
-            225,
-            font_regular,
-            (30, 30, 30, 255)
-        )
-        canvas.paste(rotated_img, paste_pos, rotated_img)
+        if 'birth_date' in rects:
+            info = rects['birth_date']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw, date_str,
+                info['center_x'] - info['width']/2,
+                info['center_y'] - info['height']/2,
+                info['width'], info['height'], -info['rotation'], font, text_color
+            )
+            canvas.paste(rotated, pos, rotated)
 
-        # Draw name centered at y=3090
-        user_name = f"{user_info.get('First Name', '')} {user_info.get('Last Name', '')}".strip()
-        bbox = draw.textbbox((0, 0), user_name, font=font_bold)
-        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        draw.text(((a3_width-w)//2, 3090), user_name, font=font_bold, fill=(10, 10, 10, 255))
+        if 'moon_sign_name' in rects:
+            info = rects['moon_sign_name']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw, moon_sign,
+                info['center_x'] - info['width']/2,
+                info['center_y'] - info['height']/2,
+                info['width'], info['height'], -info['rotation'], font, text_color
+            )
+            canvas.paste(rotated, pos, rotated)
 
-        # Draw moon sign name
-        moon_sign_text = zodiac_sign  # Using the zodiac sign as the moon sign name
-        bbox = draw.textbbox((0, 0), moon_sign_text, font=font_regular)
-        text_width = bbox[2] - bbox[0]
-        moon_x = 428.1203 + (198.667 - text_width) / 2
-        draw.text((moon_x, 2722.5959), moon_sign_text, font=font_regular, fill=(30, 30, 30, 255))
-
-        # Draw sun sign name
-        sun_sign_text = zodiac_sign
-        bbox = draw.textbbox((0, 0), sun_sign_text, font=font_regular)
-        text_width = bbox[2] - bbox[0]
-        sun_x = 1847.8485 + (198.667 - text_width) / 2
-        draw.text((sun_x, 2722.5959), sun_sign_text, font=font_regular, fill=(30, 30, 30, 255))
-
+        if 'sun_sign_name' in rects:
+            info = rects['sun_sign_name']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw, sun_sign,
+                info['center_x'] - info['width']/2,
+                info['center_y'] - info['height']/2,
+                info['width'], info['height'], -info['rotation'], font, text_color
+            )
+            canvas.paste(rotated, pos, rotated)
 
         buf = BytesIO()
         canvas.save(buf, format="PNG")
         return buf.getvalue()
+
+    @staticmethod
+    def get_placeholder_rects(svg_content: str, ids: list) -> dict:
+        """
+        Extract rectangle information from SVG content.
+        Returns a dictionary with rectangle properties including center coordinates, dimensions and rotation.
+        """
+        rects = {}
+        root = ET.fromstring(svg_content)
+        data_group = root.find(".//*[@id='data']")
+
+        if data_group is None:
+            for g in root.iter():
+                if g.tag.endswith('g') and g.attrib.get('id') == 'data':
+                    data_group = g
+                    break
+        
+        if data_group is None:
+            logging.warning("Could not find the data group in the SVG template.")
+            return rects
+
+        for elem in data_group:
+            if elem.tag.endswith('rect'):
+                rid = elem.attrib.get('id')
+                if rid in ids:
+                    width = float(elem.attrib.get('width', '0'))
+                    height = float(elem.attrib.get('height', '0'))
+                    x = float(elem.attrib.get('x', '0'))
+                    y = float(elem.attrib.get('y', '0'))
+                    
+                    transform = elem.attrib.get('transform', '')
+                    rotation = 0.0
+                    tx, ty = 0.0, 0.0
+
+                    m_rotate = re.search(r'rotate\(([^)]+)\)', transform)
+                    if m_rotate:
+                        rotation = float(m_rotate.group(1).split()[0])
+
+                    m_translate = re.search(r'translate\(([^)]+)\)', transform)
+                    if m_translate:
+                        coords = m_translate.group(1).replace(',', ' ').split()
+                        if len(coords) >= 2:
+                            tx = float(coords[0])
+                            ty = float(coords[1])
+                    
+                    local_center_x = x + width / 2
+                    local_center_y = y + height / 2
+
+                    angle_rad = math.radians(rotation)
+                    cos_a = math.cos(angle_rad)
+                    sin_a = math.sin(angle_rad)
+                    
+                    rotated_x = local_center_x * cos_a - local_center_y * sin_a
+                    rotated_y = local_center_x * sin_a + local_center_y * cos_a
+
+                    final_center_x = rotated_x + tx
+                    final_center_y = rotated_y + ty
+
+                    rects[rid] = {
+                        'center_x': final_center_x,
+                        'center_y': final_center_y,
+                        'width': width,
+                        'height': height,
+                        'rotation': rotation
+                    }
+        return rects
+
+    @staticmethod
+    def hide_data_text_elements(svg_content: str) -> str:
+        """
+        Add opacity=0 to the data group to hide placeholder elements.
+        """
+        root = ET.fromstring(svg_content)
+        for g in root.iter():
+            if g.tag.endswith('g') and g.attrib.get('id') == 'data':
+                g.attrib['opacity'] = '0'
+                break
+        return ET.tostring(root, encoding='unicode')
