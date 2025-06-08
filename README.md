@@ -200,3 +200,15 @@ python -m pytest src/tests/ -v -s
 
 - Running the tests creates images like `test_results/natal_chart_test.png`, `test_end_to_end_chart.png`, and `test_results/test_chart_generation.png` for manual inspection. These files are not tracked in version control.
 - The `test_chart_generation` test specifically saves its output to `test_results/test_chart_generation.png` for you to check the generated chart image.
+
+## 🆕 Custom Features for GPT Integration
+
+- **AWS S3 Integration**: Images are uploaded to AWS S3 for storage, ensuring scalability and reliability.
+- **Enhanced Response Format**: The `/natal-chart` endpoint now returns a structured response with a download link to the generated image, rather than embedding the image directly in the response.
+- **Improved Image Handling**: Images are resized to a maximum dimension of 1500px before being uploaded to S3, optimizing for quality and performance.
+
+### Updated User Flow
+
+1. **Send Email with Birth Information**: As before, users send an email with their birth details.
+2. **Automatic Processing**: The system processes the email, generates the chart, and uploads the image to S3.
+3. **Receive Your Chart**: Users receive an email with a link to download their natal chart from S3.

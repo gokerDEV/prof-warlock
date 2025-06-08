@@ -232,3 +232,9 @@ prof_warlock/
   - Testing & refinement
   - Documentation
   - Deployment
+
+## 🆕 Custom Features for GPT Integration
+
+- **AWS S3 Integration**: Images are uploaded to AWS S3 for storage, ensuring scalability and reliability.
+- **Enhanced Response Format**: The `/natal-chart` endpoint now returns a structured response with a download link to the generated image, rather than embedding the image directly in the response.
+- **Improved Image Handling**: Images are resized to a maximum dimension of 1500px before being uploaded to S3, optimizing for quality and performance.
