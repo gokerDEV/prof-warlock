@@ -26,6 +26,10 @@ from .zodiac_service import Zodiac
 from natal.stats import Stats
 from .aspect_matrix_service import AspectMatrixService
 from .element_distribution_service import ElementDistributionService
+from .distribution_service import DistributionService
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class NatalChartService:
@@ -441,6 +445,8 @@ class NatalChartService:
             svg_paths_dir=svg_paths_dir,
             rects=rects
         )
+
+ 
         
         font = ImageFont.truetype(str(font_dir / 'Montserrat-Bold.ttf'), 72)
         if 'name' in rects:
@@ -466,6 +472,34 @@ class NatalChartService:
                 info['width'], info['height'], -info['rotation'], font, text_color
             )
             canvas.paste(rotated, pos, rotated)
+            
+        font = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 36)
+        # Draw modality distribution
+        DistributionService.draw_modality_distribution(
+            draw=draw,
+            stats=stats,
+            rects=rects,
+            font=font,
+            svg_paths_dir=svg_paths_dir
+        )
+
+        # Draw polarity distribution
+        DistributionService.draw_polarity_distribution(
+            draw=draw,
+            stats=stats,
+            rects=rects,
+            font=font,
+            svg_paths_dir=svg_paths_dir
+        )
+
+        # Draw hemisphere distribution
+        DistributionService.draw_hemisphere_distribution(
+            draw=draw,
+            stats=stats,
+            rects=rects,
+            font=font,
+            svg_paths_dir=svg_paths_dir
+        )
 
         buf = BytesIO()
         canvas.save(buf, format="PNG")

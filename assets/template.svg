@@ -473,8 +473,8 @@
     <rect id="moon_sign_svg" x="427.3" y="2532.7" width="201.6" height="201.6" />
     <rect id="sun_sign_svg" x="1867.5" y="2540" width="163.9" height="163.9" />
     <rect id="location" x="1035.1" y="3084.7" width="409.9" height="35.4" />
-    <rect id="modality" x="55.3" y="3238.9" width="660" height="240" />
-    <rect id="polarity" x="758.9" y="3238.9" width="660" height="240" />
-    <rect id="hemisphere" x="1462.4" y="3238.9" width="660" height="240" />
+    <rect id="hemisphere" x="55.3" y="3260" width="660" height="200" />
+    <rect id="polarity" x="758.9" y="3260" width="660" height="200" />
+    <rect id="modality" x="1462.4" y="3260" width="660" height="200" />
   </g>
 </svg>

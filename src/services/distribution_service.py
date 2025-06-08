@@ -9,6 +9,7 @@ from PIL import ImageDraw, Image, ImageFont
 from typing import Dict, List
 from natal.stats import Stats
 from .distribution_utils import DistributionUtils
+from .svg_path_service import SVGPathService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,123 +24,117 @@ class DistributionService:
     HEMISPHERES = ['←', '→', '↑', '↓']
     
     # Colors
-    BACKGROUND_COLOR = "#393939"  
-    TEXT_COLOR = "#fcf2de"  
+    TEXT_COLOR = "#fcf2de"  # Light beige text
 
     @staticmethod
-    def _draw_category_label(draw: ImageDraw, text: str, rect: Dict, font: ImageFont) -> None:
-        """Draw category label with background."""
-        # Create a temporary canvas for the label
-        label_width = rect['width']
-        label_height = 40  # Fixed height for labels
+    def _draw_category_line(draw: ImageDraw, label: str, bodies: List[str], x: int, y: int, font: ImageFont, svg_paths_dir: str) -> int:
+        """Draw a category label followed by its symbols in a line. Returns the y position for the next line."""
+        # Draw label
+        draw.text((x, y), f"{label}: ", font=font, fill=DistributionService.TEXT_COLOR)
         
-        label_canvas = DistributionUtils.create_grid_canvas(label_width, label_height, DistributionService.BACKGROUND_COLOR)
-        label_draw = ImageDraw.Draw(label_canvas)
+        # Calculate width of label to know where to start symbols
+        bbox = draw.textbbox((x, y), f"{label}: ", font=font)
+        symbol_x = bbox[2] + 10  # Add some spacing after label
+        symbol_size = font.size * 1.1 # Use font size for symbols
+        symbol_spacing = symbol_size + 5  # Add some spacing between symbols
         
-        # Calculate text position to center it
-        bbox = label_draw.textbbox((0, 0), text, font=font)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
+        # Load SVG files
+        SVGPathService._load_svg_files(svg_paths_dir)
         
-        x = (label_width - text_width) / 2
-        y = (label_height - text_height) / 2
-        
-        # Draw text in TEXT_COLOR
-        label_draw.text((x, y), text, font=font, fill=DistributionService.TEXT_COLOR)
-        
-        # Calculate position above the rect
-        paste_x = int(rect['center_x'] - label_width / 2)
-        paste_y = int(rect['center_y'] - rect['height'] / 2 - label_height - 10)  # 10px gap
-        
-        # Paste the label onto the main canvas
-        draw._image.paste(label_canvas, (paste_x, paste_y), label_canvas)
-
-    @staticmethod
-    def _draw_symbol_grid(draw: ImageDraw, bodies: List[str], rect: Dict) -> None:
-        """Draw symbols in a grid with background."""
-        # Create a temporary canvas for this category's grid
-        grid_width = rect['width']
-        grid_height = rect['height']
-        
-        # Create canvas and calculate positions
-        grid_canvas = DistributionUtils.create_grid_canvas(grid_width, grid_height, DistributionService.BACKGROUND_COLOR)
-        positions = DistributionUtils.calculate_grid_positions(grid_width, grid_height)
-        
-        # Draw each body's symbol in the grid
-        for i, body in enumerate(bodies[:9]):  # Limit to 9 symbols (3x3 grid)
+        # Draw symbols
+        for body in bodies:
             if body not in DistributionUtils.BODY_TO_SYMBOL:
                 continue
                 
             symbol = DistributionUtils.BODY_TO_SYMBOL[body]
-            x, y, cell_width, _ = positions[i]
-            
-            if sym_img := DistributionUtils.draw_symbol(symbol, size=int(cell_width * 0.8), color=DistributionService.TEXT_COLOR):
-                DistributionUtils.paste_centered(grid_canvas, sym_img, x, y)
+            if sym_img := DistributionUtils.draw_symbol(symbol, size=symbol_size, color=DistributionService.TEXT_COLOR):
+                paste_x = int(symbol_x)
+                paste_y = int(y + (font.size - sym_img.height) / 2) + 8  # Center vertically with text
+                draw._image.paste(sym_img, (paste_x, paste_y), sym_img)
+                symbol_x += symbol_spacing
         
-        # Calculate paste position to center the grid
-        paste_x = int(rect['center_x'] - grid_width / 2)
-        paste_y = int(rect['center_y'] - grid_height / 2)
-        
-        # Paste the grid onto the main canvas
-        draw._image.paste(grid_canvas, (paste_x, paste_y), grid_canvas)
+        return y + font.size + 10  # Return position for next line with some spacing
 
     @staticmethod
-    def draw_modality_distribution(draw: ImageDraw, stats: Stats, rects: Dict[str, Dict], font: ImageFont) -> None:
+    def draw_modality_distribution(draw: ImageDraw, stats: Stats, rects: Dict[str, Dict], font: ImageFont, svg_paths_dir: str) -> None:
         """Draw modality distribution with labels."""
-        # Get modality distribution from stats
+        if 'modality' not in rects:
+            return
+            
+        rect = rects['modality']
+        x = int(rect['center_x'] - rect['width'] / 2)
+        y = int(rect['center_y'] - rect['height'] / 2)
+        
+        # Get modality distribution
         distribution = stats.distribution('modality')
         modality_bodies = DistributionUtils.parse_distribution_bodies(distribution.grid)
         
-        # Draw symbols and labels for each modality
+        # Draw each modality line
+        current_y = y + 10  # Start with some margin
         for modality in DistributionService.MODALITIES:
-            if modality not in rects or modality not in modality_bodies:
-                continue
-                
-            # Draw label
-            DistributionService._draw_category_label(draw, modality.title(), rects[modality], font)
+            # Get bodies for this modality, or empty list if none
+            bodies = modality_bodies.get(modality, [])
             
-            # Draw symbol grid
-            DistributionService._draw_symbol_grid(
+            current_y = DistributionService._draw_category_line(
                 draw=draw,
-                bodies=modality_bodies[modality],
-                rect=rects[modality]
+                label=modality.title(),
+                bodies=bodies,
+                x=x + 10,
+                y=current_y,
+                font=font,
+                svg_paths_dir=svg_paths_dir
             )
 
     @staticmethod
-    def draw_polarity_distribution(draw: ImageDraw, stats: Stats, rects: Dict[str, Dict], font: ImageFont) -> None:
+    def draw_polarity_distribution(draw: ImageDraw, stats: Stats, rects: Dict[str, Dict], font: ImageFont, svg_paths_dir: str) -> None:
         """Draw polarity distribution with labels."""
-        # Get polarity distribution from stats
+        if 'polarity' not in rects:
+            return
+            
+        rect = rects['polarity']
+        x = int(rect['center_x'] - rect['width'] / 2)
+        y = int(rect['center_y'] - rect['height'] / 2)
+        
+        # Get polarity distribution
         distribution = stats.distribution('polarity')
         polarity_bodies = DistributionUtils.parse_distribution_bodies(distribution.grid)
         
-        # Draw symbols and labels for each polarity
+        # Draw each polarity line
+        current_y = y + 10  # Start with some margin
         for polarity in DistributionService.POLARITIES:
-            if polarity not in rects or polarity not in polarity_bodies:
-                continue
-                
-            # Draw label
-            DistributionService._draw_category_label(draw, polarity.title(), rects[polarity], font)
+            # Get bodies for this polarity, or empty list if none
+            bodies = polarity_bodies.get(polarity, [])
             
-            # Draw symbol grid
-            DistributionService._draw_symbol_grid(
+            current_y = DistributionService._draw_category_line(
                 draw=draw,
-                bodies=polarity_bodies[polarity],
-                rect=rects[polarity]
+                label=polarity.title(),
+                bodies=bodies,
+                x=x + 10,
+                y=current_y,
+                font=font,
+                svg_paths_dir=svg_paths_dir
             )
 
     @staticmethod
-    def draw_hemisphere_distribution(draw: ImageDraw, stats: Stats, rects: Dict[str, Dict], font: ImageFont) -> None:
+    def draw_hemisphere_distribution(draw: ImageDraw, stats: Stats, rects: Dict[str, Dict], font: ImageFont, svg_paths_dir: str) -> None:
         """Draw hemisphere distribution with labels."""
-        # Get hemisphere distribution from stats
-        distribution = stats.hemispheres
+        if 'hemisphere' not in rects:
+            return
+            
+        rect = rects['hemisphere']
+        x = int(rect['center_x'] - rect['width'] / 2)
+        y = int(rect['center_y'] - rect['height'] / 2)
+        
+        # Get hemisphere distribution
+        distribution = stats.hemisphere
         hemisphere_bodies = DistributionUtils.parse_distribution_bodies(distribution.grid, skip_header=False)
         
-        # Draw symbols and labels for each hemisphere
+        # Draw each hemisphere line
+        current_y = y + 10  # Start with some margin
         for hemisphere in DistributionService.HEMISPHERES:
-            if hemisphere not in rects or hemisphere not in hemisphere_bodies:
-                continue
-                
-            # Draw label
+            # Get bodies for this hemisphere, or empty list if none
+            bodies = hemisphere_bodies.get(hemisphere, [])
+            
             label_text = {
                 '←': 'Left',
                 '→': 'Right',
@@ -147,11 +142,12 @@ class DistributionService:
                 '↓': 'Below'
             }.get(hemisphere, hemisphere)
             
-            DistributionService._draw_category_label(draw, label_text, rects[hemisphere], font)
-            
-            # Draw symbol grid
-            DistributionService._draw_symbol_grid(
+            current_y = DistributionService._draw_category_line(
                 draw=draw,
-                bodies=hemisphere_bodies[hemisphere],
-                rect=rects[hemisphere]
+                label=label_text,
+                bodies=bodies,
+                x=x + 10,
+                y=current_y,
+                font=font,
+                svg_paths_dir=svg_paths_dir
             ) 
