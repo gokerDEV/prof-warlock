@@ -270,8 +270,14 @@ class NatalChartService:
 
         base_path = Path(__file__).resolve().parent
         assets_path = base_path / '../../assets'
-        font_dir = assets_path / 'fonts' / 'static'
-        font = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 48)
+        font_dir = assets_path / 'fonts'
+        font_family_bold = str(font_dir / 'static' / 'Montserrat-Bold.ttf')
+        font_family_regular = str(font_dir / 'static' / 'Montserrat-Regular.ttf')
+        # font_family_bold = str(font_dir / 'Pompiere' / 'Pompiere-Regular.ttf')
+        # font_family_regular = str(font_dir / 'Pompiere' / 'Pompiere-Regular.ttf')
+        font = ImageFont.truetype(font_family_bold, 48)
+        
+        
         
 
         # Get zodiac sign images
@@ -416,7 +422,7 @@ class NatalChartService:
             )
             canvas.paste(rotated, pos, rotated)
 
-        font = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 24)
+        font = ImageFont.truetype(font_family_regular, 24)
 
         if 'moon_sign_name' in rects:
             info = rects['moon_sign_name']
@@ -448,7 +454,7 @@ class NatalChartService:
 
  
         
-        font = ImageFont.truetype(str(font_dir / 'Montserrat-Bold.ttf'), 72)
+        font = ImageFont.truetype(font_family_bold, 72)
         if 'name' in rects:
             info = rects['name']
             rotated, pos = NatalChartService._draw_rotated_text(
@@ -459,7 +465,7 @@ class NatalChartService:
             canvas.paste(rotated, pos, rotated)
             
          # Draw location from stats basic info
-        font = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 24)
+        font = ImageFont.truetype(font_family_regular, 24)
         basic_info = stats.basic_info
         if 'location' in rects and basic_info:
             location_text = basic_info.grid[1][1]
@@ -473,7 +479,7 @@ class NatalChartService:
             )
             canvas.paste(rotated, pos, rotated)
             
-        font = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 36)
+        font = ImageFont.truetype(font_family_bold, 36)
         # Draw modality distribution
         DistributionService.draw_modality_distribution(
             draw=draw,
