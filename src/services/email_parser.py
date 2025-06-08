@@ -14,6 +14,7 @@ import logging
 import re
 from transformers import pipeline
 import torch
+from dateutil import parser as date_parser
 
 from ..core.domain_models import IncomingEmail, EmailAttachment
 
@@ -214,6 +215,30 @@ Place of Birth: {birth_info.get('birth_place', '')}"""
             logging.error(f"Failed to parse raw email: {str(e)}", exc_info=True)
             raise
     
+    def _format_date_time(self, date_str: str, time_str: str) -> str:
+        """
+        Format date and time strings into the required format (DD-MM-YYYY HH:MM).
+        Handles various date formats including natural language.
+        """
+        try:
+            # Parse the date
+            parsed_date = date_parser.parse(date_str)
+            
+            # Parse the time if provided
+            if time_str:
+                parsed_time = date_parser.parse(time_str)
+                # Combine date and time
+                parsed_date = parsed_date.replace(
+                    hour=parsed_time.hour,
+                    minute=parsed_time.minute
+                )
+            
+            # Format to required format
+            return parsed_date.strftime("%d-%m-%Y %H:%M")
+        except Exception as e:
+            logging.warning(f"Failed to parse date/time: {e}")
+            return f"{date_str} {time_str}".strip()
+
     def parse_webhook_data(self, webhook_data: Dict[str, Any]) -> IncomingEmail:
         """
         Parse webhook data into a structured IncomingEmail object using transformers.
@@ -241,7 +266,7 @@ Place of Birth: {birth_info.get('birth_place', '')}"""
                 date_str = birth_info.get('birth_date', '')
                 time_str = birth_info.get('birth_time', '')
                 if date_str and time_str:  # If we have both date and time
-                    date_str = f"{date_str} {time_str}"
+                    date_str = self._format_date_time(date_str, time_str)
                 
                 body = f"""First Name: {birth_info.get('name', '')}
 Last Name: {birth_info.get('last_name', '')}
