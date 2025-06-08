@@ -181,7 +181,7 @@ async def generate_natal_chart(
 
         # Resize the image
         image = Image.open(io.BytesIO(chart_data_bytes))
-        max_size = 1000
+        max_size = 800
         image.thumbnail((max_size, max_size), Image.ANTIALIAS)
 
         # Save the resized image to bytes
@@ -189,8 +189,8 @@ async def generate_natal_chart(
         image.save(output, format='PNG')
         resized_chart_data_bytes = output.getvalue()
 
-        # Encode the resized chart data to base64
-        chart_data_base64 = base64.b64encode(resized_chart_data_bytes).decode('utf-8')
+        # Encode the resized chart data to base64 with prefix
+        chart_data_base64 = "data:image/png;base64," + base64.b64encode(resized_chart_data_bytes).decode('utf-8')
 
         return {
             "status": "success",
