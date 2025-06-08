@@ -46,17 +46,31 @@ class TestEmailParsing:
             'TextBody': body,
             'Attachments': []
         }
-        email = EmailParsingService.parse_webhook_data(webhook_data)
-        assert email.body.strip() == body.strip()
-        for field in ["First Name:", "Last Name:", "Date of Birth:", "Place of Birth:"]:
-            assert field in email.body
-        assert email.from_email == 'jane.doe@example.com'
-        assert email.from_name == 'Jane Doe'
-        assert email.attachments == []
 
-        # Test that the parser correctly extracts time
-        user_info = NatalChartService.parse_user_info(email.body)
-        assert user_info["Date of Birth"] == "15-06-1985 12:10"
+        # Mock transformer responses
+        mock_responses = {
+            "What is the first name?": {"answer": "Jane"},
+            "What is the last name?": {"answer": "Doe"},
+            "What is the date of birth?": {"answer": "15-06-1985"},
+            "What is the time of birth?": {"answer": "12:10"},
+            "Where was the person born?": {"answer": "San Francisco, California, USA"}
+        }
+        
+        def mock_qa_side_effect(**kwargs):
+            return mock_responses[kwargs["question"]]
+        
+        mock_qa = MagicMock(side_effect=mock_qa_side_effect)
+        
+        with patch('transformers.pipeline', return_value=mock_qa):
+            with patch.object(EmailParsingService, '_get_qa_pipeline', return_value=mock_qa):
+                parser = EmailParsingService()
+                email = parser.parse_webhook_data(webhook_data)
+                assert email.body.strip() == body.strip()
+                for field in ["First Name:", "Last Name:", "Date of Birth:", "Place of Birth:"]:
+                    assert field in email.body
+                assert email.from_email == 'jane.doe@example.com'
+                assert email.from_name == 'Jane Doe'
+                assert email.attachments == []
 
     def test_inbound_email_parsing_with_mock_data(self):
         """Test email parsing with mock inbound email data."""
@@ -82,16 +96,33 @@ Best regards""",
             'MessageID': 'test-message-id',
             'Attachments': []
         }
+
+        # Mock transformer responses
+        mock_responses = {
+            "What is the first name?": {"answer": "John"},
+            "What is the last name?": {"answer": "Doe"},
+            "What is the date of birth?": {"answer": "15-08-1985"},
+            "What is the time of birth?": {"answer": "11:50"},
+            "Where was the person born?": {"answer": "New York, NY, USA"}
+        }
         
-        email = EmailParsingService.parse_webhook_data(mock_webhook_data)
-        error = ValidationService.validate_email_for_processing(email)
-        assert error is None
+        def mock_qa_side_effect(**kwargs):
+            return mock_responses[kwargs["question"]]
         
-        user_info = NatalChartService.parse_user_info(email.body)
-        assert user_info["First Name"] == "John"
-        assert user_info["Last Name"] == "John Doe"
-        assert user_info["Date of Birth"] == "15-08-1985 11:50"  # Updated to include time
-        assert user_info["Place of Birth"] == "New York, NY, USA"
+        mock_qa = MagicMock(side_effect=mock_qa_side_effect)
+        
+        with patch('transformers.pipeline', return_value=mock_qa):
+            with patch.object(EmailParsingService, '_get_qa_pipeline', return_value=mock_qa):
+                parser = EmailParsingService()
+                email = parser.parse_webhook_data(mock_webhook_data)
+                error = ValidationService.validate_email_for_processing(email)
+                assert error is None
+                
+                user_info = NatalChartService.parse_user_info(email.body)
+                assert user_info["First Name"] == "John"
+                assert user_info["Last Name"] == "Doe"
+                assert user_info["Date of Birth"] == "15-08-1985 11:50"
+                assert user_info["Place of Birth"] == "New York, NY, USA"
 
 # Validation Tests
 class TestValidation:

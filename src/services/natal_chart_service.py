@@ -77,14 +77,26 @@ class NatalChartService:
                     if field == "Date of Birth":
                         if not any(char.isdigit() for char in value):
                             value = ""
+                    if field == "Time of Birth":
+                        # Extract only time portion if it contains time format
+                        time_match = re.search(r'\d{1,2}:\d{2}', value)
+                        if time_match:
+                            value = time_match.group(0)
+                        else:
+                            value = ""
                     if value:
                         results[field] = value
             except Exception as e:
                 logging.warning(f"Error extracting {field} with transformers: {e}")
                 continue
+
         # Combine date and time if both present
         if results["Date of Birth"] and results["Time of Birth"]:
-            results["Date of Birth"] = f"{results['Date of Birth']} {results['Time of Birth']}"
+            # Clean up date format if needed
+            date_str = results["Date of Birth"].split()[0]  # Take only the date part
+            time_str = results["Time of Birth"]
+            results["Date of Birth"] = f"{date_str} {time_str}"
+        
         # Remove Time of Birth from final dict (not expected downstream)
         results.pop("Time of Birth", None)
         return results

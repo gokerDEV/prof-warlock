@@ -152,6 +152,20 @@ Place of Birth: ...
 </p>
 
 <p>Best regards,<br>
+Prof. Warlock</p>""",
+
+            "invalid_date_format": f"""<p>Dear {first_name},</p>
+
+<p>The Date of Birth format is incorrect. Please use the format DD-MM-YYYY HH:MM (e.g., 01-01-1990 14:30).</p>
+
+<p>Best regards,<br>
+Prof. Warlock</p>""",
+
+            "invalid_time_format": f"""<p>Dear {first_name},</p>
+
+<p>The Time of Birth format is incorrect. Please use the format HH:MM in 24-hour format (e.g., 14:30 for 2:30 PM).</p>
+
+<p>Best regards,<br>
 Prof. Warlock</p>"""
         }
         
@@ -167,7 +181,9 @@ Prof. Warlock</p>""")
     def _create_error_subject(self, error_type: str) -> str:
         """Create appropriate subject line for error type."""
         subjects = {
-            "missing_user_info": "[Prof. Warlock] Missing Information"
+            "missing_user_info": "[Prof. Warlock] Missing Information",
+            "invalid_date_format": "[Prof. Warlock] Invalid Date Format",
+            "invalid_time_format": "[Prof. Warlock] Invalid Time Format"
         }
         return subjects.get(error_type, "[Prof. Warlock] Submission Error")
     
