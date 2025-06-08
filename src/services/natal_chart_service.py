@@ -25,6 +25,7 @@ import math
 from .zodiac_service import Zodiac
 from natal.stats import Stats
 from .aspect_matrix_service import AspectMatrixService
+from .element_distribution_service import ElementDistributionService
 
 
 class NatalChartService:
@@ -385,11 +386,10 @@ class NatalChartService:
         canvas.paste(moon_sign_img, (415, 2560), moon_sign_img)
 
         # Get placeholder rectangles
-        rects = NatalChartService.get_placeholder_rects(svg_content, ['name', 'birth_place', 'birth_date', 'moon_sign_name', 'sun_sign_name'])
+        rects = NatalChartService.get_placeholder_rects(svg_content, ['name', 'birth_place', 'birth_date', 'moon_sign_name', 'sun_sign_name', 'earth', 'water', 'fire', 'air'])
         draw = ImageDraw.Draw(canvas)
 
         # Draw each text element individually
-
         if 'birth_place' in rects:
             info = rects['birth_place']
             rotated, pos = NatalChartService._draw_rotated_text(
@@ -432,6 +432,13 @@ class NatalChartService:
             )
             canvas.paste(rotated, pos, rotated)
             
+        # Draw element distribution
+        ElementDistributionService.draw_element_distribution(
+            draw=draw,
+            stats=stats,
+            svg_paths_dir=svg_paths_dir,
+            rects=rects
+        )
         
         font = ImageFont.truetype(str(font_dir / 'Montserrat-Bold.ttf'), 72)
         if 'name' in rects:
