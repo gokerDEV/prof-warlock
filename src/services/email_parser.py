@@ -27,13 +27,22 @@ class EmailParsingService:
     def __init__(self):
         """Initialize transformer models for email understanding."""
         try:
-            # Field extraction patterns (fallback)
+            # Field extraction patterns
             self.field_patterns = {
                 'name': r'First Name:\s*([^\n]+)',
                 'last_name': r'Last Name:\s*([^\n]+)',
                 'birth_date': r'Date of Birth:\s*(\d{1,2}[-/]\d{1,2}[-/]\d{4}(?:\s+\d{1,2}:\d{2})?)',
                 'birth_place': r'Place of Birth:\s*([^\n]+)',
             }
+            
+            # Common signature markers
+            self.signature_markers = [
+                r'--\s*\n',  # Standard signature delimiter
+                r'Best regards,',
+                r'Sincerely,',
+                r'Thanks,',
+                r'Cheers,',
+            ]
             
             logging.info("Email parser initialized successfully")
         except Exception as e:
@@ -50,8 +59,44 @@ class EmailParsingService:
             )
         return EmailParsingService._qa_pipeline
     
+    def _remove_signature(self, text: str) -> str:
+        """Remove email signature from text."""
+        # First try to split on standard signature delimiter
+        parts = text.split('\n--\n')
+        if len(parts) > 1:
+            return parts[0].strip()
+        
+        # If no standard delimiter, try to find signature start
+        lines = text.split('\n')
+        signature_start = -1
+        
+        for i, line in enumerate(lines):
+            # Check for signature markers
+            for marker in self.signature_markers:
+                if re.search(marker, line, re.IGNORECASE):
+                    signature_start = i
+                    break
+            if signature_start != -1:
+                break
+        
+        if signature_start != -1:
+            return '\n'.join(lines[:signature_start]).strip()
+        
+        return text.strip()
+    
+    def _preprocess_text(self, text: str) -> str:
+        """Clean and normalize text for processing."""
+        # Remove signature first
+        text = self._remove_signature(text)
+        
+        # Remove multiple newlines and spaces
+        text = re.sub(r'\n+', '\n', text)
+        text = re.sub(r'\s+', ' ', text)
+        
+        return text.strip()
+    
     def _parse_with_transformers(self, body: str) -> Dict[str, str]:
-        """Attempt to extract user info using a transformers QA model."""
+        """Extract information using transformer QA model."""
         qa = self._get_qa_pipeline()
         questions = {
             "name": "What is the first name?",
@@ -60,13 +105,38 @@ class EmailParsingService:
             "birth_time": "What is the time of birth?",
             "birth_place": "Where was the person born?"
         }
+        
         answers = {}
         for key, question in questions.items():
             try:
                 result = qa(question=question, context=body)
-                answers[key] = result.get("answer", "").strip()
+                answer = result.get("answer", "").strip()
+                if answer:
+                    answers[key] = answer
             except Exception as e:
                 logging.warning(f"Transformers parsing failed for {key}: {e}")
+        
+        # Parse date and time if both are present
+        if 'birth_date' in answers and 'birth_time' in answers:
+            try:
+                # Parse date and time separately
+                date_str = answers['birth_date']
+                time_str = answers['birth_time']
+                
+                # Try to parse date
+                parsed_date = date_parser.parse(date_str)
+                date_formatted = parsed_date.strftime("%d-%m-%Y")
+                
+                # Try to parse time
+                parsed_time = date_parser.parse(time_str)
+                time_formatted = parsed_time.strftime("%H:%M")
+                
+                # Combine them
+                answers['birth_date'] = f"{date_formatted} {time_formatted}"
+                
+            except Exception as e:
+                logging.warning(f"Failed to parse date/time: {e}")
+        
         return answers
     
     def extract_birth_info(self, text: str) -> Dict[str, str]:
@@ -82,7 +152,7 @@ class EmailParsingService:
             info = self._parse_with_transformers(cleaned_text)
             
             # If transformers failed to find some fields, try regex
-            if not all(key in info for key in ['name', 'last_name', 'birth_date', 'birth_time', 'birth_place']):
+            if not all(key in info for key in ['name', 'last_name', 'birth_date', 'birth_place']):
                 regex_info = self._extract_with_regex(cleaned_text)
                 info.update({k: v for k, v in regex_info.items() if k not in info})
             
@@ -100,13 +170,6 @@ class EmailParsingService:
             if match:
                 info[field] = match.group(1).strip()
         return info
-    
-    def _preprocess_text(self, text: str) -> str:
-        """Clean and normalize text for processing."""
-        # Remove multiple newlines and spaces
-        text = re.sub(r'\n+', '\n', text)
-        text = re.sub(r'\s+', ' ', text)
-        return text.strip()
     
     @staticmethod
     def parse_email(data: Union[Dict[str, Any], str]) -> IncomingEmail:
@@ -261,17 +324,11 @@ Place of Birth: {birth_info.get('birth_place', '')}"""
         # Try to extract birth information using transformers
         try:
             birth_info = self.extract_birth_info(body)
-            if birth_info and all(birth_info.get(k) for k in ['name', 'last_name', 'birth_date', 'birth_time', 'birth_place']):
-                # Only reformat if we have all required info
-                date_str = birth_info.get('birth_date', '')
-                time_str = birth_info.get('birth_time', '')
-                if date_str and time_str:  # If we have both date and time
-                    date_str = self._format_date_time(date_str, time_str)
-                
-                body = f"""First Name: {birth_info.get('name', '')}
-Last Name: {birth_info.get('last_name', '')}
-Date of Birth: {date_str}
-Place of Birth: {birth_info.get('birth_place', '')}"""
+            if birth_info and all(birth_info.get(k) for k in ['name', 'last_name', 'birth_date', 'birth_place']):
+                body = f"""First Name: {birth_info['name']}
+Last Name: {birth_info['last_name']}
+Date of Birth: {birth_info['birth_date']}
+Place of Birth: {birth_info['birth_place']}"""
         except Exception as e:
             logging.warning(f"Failed to extract birth info: {e}")
             # Keep original body on failure
@@ -283,47 +340,40 @@ Place of Birth: {birth_info.get('birth_place', '')}"""
             from_email=from_email,
             from_name=from_name,
             subject=subject,
-            body=body,
+            body=body.strip(),
             attachments=attachments,
             message_id=message_id
         )
     
     def _extract_clean_body(self, webhook_data: Dict[str, Any]) -> str:
-        """Extract and clean email body text."""
-        # Try text first (preserves line breaks), then fallback to HTML
-        text_body = webhook_data.get('TextBody', '')
-        html_body = webhook_data.get('HtmlBody', '')
-        
-        if text_body:
-            return text_body.strip()
-        
-        if html_body:
-            return self._clean_html_content(html_body)
-        
-        return ""
+        """Extract and clean email body from webhook data."""
+        try:
+            # Try text first (preserves line breaks)
+            body = webhook_data.get('TextBody', '')
+            if body:
+                return self._preprocess_text(body)
+            
+            # Fallback to HTML
+            body = webhook_data.get('HtmlBody', '')
+            if body:
+                return self._preprocess_text(self._clean_html_content(body))
+            
+            return ""
+        except Exception as e:
+            logging.error(f"Failed to extract body: {e}")
+            return ""
     
     @staticmethod
     def _clean_html_content(html_content: str) -> str:
-        """Clean HTML content and extract readable text while preserving line structure."""
+        """Clean HTML content and extract text."""
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             # Remove script and style elements
             for script in soup(["script", "style"]):
                 script.decompose()
-            
-            # Get text and preserve line breaks
-            text = soup.get_text()
-            # Clean up excessive whitespace but preserve line breaks
-            lines = []
-            for line in text.splitlines():
-                cleaned_line = ' '.join(line.split())  # Clean internal whitespace
-                if cleaned_line:  # Only keep non-empty lines
-                    lines.append(cleaned_line)
-            
-            return '\n'.join(lines)
-            
-        except Exception:
-            # Fallback: return HTML as-is if parsing fails
+            return soup.get_text()
+        except Exception as e:
+            logging.error(f"Failed to clean HTML: {e}")
             return html_content
     
     @staticmethod

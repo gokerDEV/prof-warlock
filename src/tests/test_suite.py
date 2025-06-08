@@ -178,6 +178,70 @@ Thanks a bunch!""",
                 error = ValidationService.validate_email_for_processing(email)
                 assert error is None
 
+    def test_parse_email_with_signature(self):
+        """Test parsing email with signature block."""
+        mock_webhook_data = {
+            'From': 'goker@example.com',
+            'FromName': 'Goker',
+            'Subject': 'Chart Request',
+            'TextBody': """To: warlock@kodkafa.com
+Subject: Chart Request
+
+Hey Professor,
+
+Could you please create a birth chart for John Doe? He was born in New
+York, USA, on March 21, 1990, around 12:00 PM.
+
+Thanks a bunch!
+
+
+-- 
+ goker  : https://goker.me : http://goker.dev : http://goker.art :
+http://goker.in""",
+            'MessageID': 'test-message-id',
+            'Attachments': []
+        }
+
+        # Mock transformer responses
+        mock_responses = {
+            "What is the first name?": {"answer": "John"},
+            "What is the last name?": {"answer": "Doe"},
+            "What is the date of birth?": {"answer": "March 21, 1990"},
+            "What is the time of birth?": {"answer": "12:00 PM"},
+            "Where was the person born?": {"answer": "New York, USA"}
+        }
+        
+        def mock_qa_side_effect(**kwargs):
+            return mock_responses[kwargs["question"]]
+        
+        mock_qa = MagicMock(side_effect=mock_qa_side_effect)
+        
+        with patch('transformers.pipeline', return_value=mock_qa):
+            with patch.object(EmailParsingService, '_get_qa_pipeline', return_value=mock_qa):
+                parser = EmailParsingService()
+                email = parser.parse_webhook_data(mock_webhook_data)
+                
+                # Check if the parser extracted and formatted the information correctly
+                assert "First Name: John" in email.body
+                assert "Last Name: Doe" in email.body
+                assert "Date of Birth: 21-03-1990 12:00" in email.body
+                assert "Place of Birth: New York, USA" in email.body
+                
+                # Verify signature was removed
+                assert "goker  : https://goker.me" not in email.body
+                assert "http://goker.dev" not in email.body
+                
+                # Validate the extracted information
+                user_info = NatalChartService.parse_user_info(email.body)
+                assert user_info["First Name"] == "John"
+                assert user_info["Last Name"] == "Doe"
+                assert user_info["Date of Birth"] == "21-03-1990 12:00"
+                assert user_info["Place of Birth"] == "New York, USA"
+                
+                # Ensure validation passes
+                error = ValidationService.validate_email_for_processing(email)
+                assert error is None
+
 # Validation Tests
 class TestValidation:
     def test_validate_user_info_completeness(self):
