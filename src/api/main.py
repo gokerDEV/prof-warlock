@@ -157,7 +157,7 @@ async def process_email_webhook(
 async def generate_natal_chart(
     request: NatalChartRequest,
     api_key: str = Depends(verify_api_key)
-) -> Dict:
+) -> JSONResponse:
     """
     Generate a natal chart based on birth information.
     
@@ -166,7 +166,7 @@ async def generate_natal_chart(
         api_key: API key for authentication
         
     Returns:
-        Dict: Generated natal chart data and image
+        JSONResponse: Generated natal chart data and image
     """
     try:
         user_info = {
@@ -179,30 +179,23 @@ async def generate_natal_chart(
         # Generate natal chart
         chart_data_bytes = natal_chart_service.generate_chart(user_info)
 
-        # Resize the image
+        # Resize image
         image = Image.open(io.BytesIO(chart_data_bytes))
         max_size = 800
         image.thumbnail((max_size, max_size), Image.LANCZOS)
 
-        # Save the resized image to bytes
-        output = io.BytesIO()
-        image.save(output, format='PNG')
-        resized_chart_data_bytes = output.getvalue()
-
         # Encode the resized chart data to base64 with prefix
-        chart_data_base64 = "data:image/png;base64," + base64.b64encode(resized_chart_data_bytes).decode('utf-8')
+        chart_data_base64 = "data:image/png;base64," + base64.b64encode(image.tobytes()).decode('utf-8')
 
-        return {
+        return JSONResponse(content={
             "status": "success",
             "data": chart_data_base64
-        }
-        
+        })
     except Exception as e:
-        logger.error(f"Failed to generate natal chart: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate natal chart: {str(e)}"
-        )
+        return JSONResponse(content={
+            "status": "error",
+            "message": f"Failed to generate natal chart: {str(e)}"
+        }, status_code=500)
 
 
 @app.post("/natal-stats")
