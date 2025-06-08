@@ -185,12 +185,13 @@ async def generate_natal_chart(
         image.thumbnail((max_size, max_size), Image.LANCZOS)
 
         # Encode the resized chart data to base64 with prefix
-        chart_data_base64 = "data:image/png;base64," + base64.b64encode(image.tobytes()).decode('utf-8')
+        chart_data_base64 = base64.b64encode(image.tobytes()).decode('utf-8')
 
-        return JSONResponse(content={
-            "status": "success",
-            "data": chart_data_base64
-        })
+        return JSONResponse(content=[{
+            "name": "natal_chart.png",
+            "mime_type": "image/png",
+            "content": chart_data_base64
+        }])
     except Exception as e:
         return JSONResponse(content={
             "status": "error",
