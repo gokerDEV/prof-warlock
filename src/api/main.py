@@ -182,7 +182,7 @@ async def generate_natal_chart(
         # Resize the image
         image = Image.open(io.BytesIO(chart_data_bytes))
         max_size = 800
-        image.thumbnail((max_size, max_size), Image.ANTIALIAS)
+        image.thumbnail((max_size, max_size), Image.LANCZOS)
 
         # Save the resized image to bytes
         output = io.BytesIO()
