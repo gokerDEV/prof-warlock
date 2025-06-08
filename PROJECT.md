@@ -9,7 +9,7 @@ description: 'A system to generate and email natal chart posters based on user-s
 
 **Prof. Warlock** is a web service that automatically generates personalized natal chart posters based on user-submitted birth data. Users send their details via email to `warlock@yourdomain.com`. The system then parses the email, generates a natal chart using the `natal` Python library, and returns the result via email.
 
-This project builds upon the earlier `prof-postmark` system, now refactored without OpenAI integration. The application will be deployed on **Render**.
+The application creates beautiful monochrome A3 posters featuring a natal chart, aspect matrix, and distribution analysis, all rendered with custom SVG symbols and an artistic border.
 
 ## 2. Project Goals
 
@@ -17,7 +17,19 @@ This project builds upon the earlier `prof-postmark` system, now refactored with
 - Extract required fields: `First Name`, `Last Name`, `Date of Birth`, and `Place of Birth`
 - Validate data completeness
 - Request missing information via email if needed
-- Generate natal charts using `natal==0.9.3`
+- Generate comprehensive natal charts using `natal==0.9.3`
+- Provide detailed astrological analysis including:
+  - Planetary positions and aspects
+  - Element distributions
+  - Modality distributions
+  - Polarity distributions
+  - Hemisphere distributions
+- Create visually appealing A3 posters with:
+  - Main natal chart
+  - Aspect matrix
+  - Distribution analysis sections
+  - Custom SVG symbols
+  - Artistic border elements
 - Email the resulting chart to users
 - Deploy on **Render**
 - Follow Clean Code principles for maintainability and readability
@@ -33,7 +45,10 @@ The service operates via an event-driven flow triggered by **Postmark** webhooks
 4. **Missing Info Handling**:
    - If incomplete, replies via Postmark with a request for missing fields
 5. **Chart Generation**:
-   - If valid, calls the `natal` library to generate a chart
+   - Calculates planetary positions using `natal`
+   - Generates aspect matrix
+   - Analyzes distributions
+   - Creates SVG-based visualizations
 6. **Email Delivery**:
    - Sends the chart as an attachment using Postmark
 
@@ -49,8 +64,16 @@ User --> warlock@yourdomain.com
 Parse Email   [Check for Missing Info]
      ↓              ↓
 [Send Info Request] OR [Generate Chart]
-     ↓                        ↓
-                   Send Email with Chart
+                        ↓
+                    Calculate Positions
+                        ↓
+                    Generate Aspects
+                        ↓
+                    Analyze Distributions
+                        ↓
+                    Create Visualization
+                        ↓
+                    Send Email with Chart
 ```
 
 ## 4. MVP Feature Set
@@ -59,7 +82,10 @@ Parse Email   [Check for Missing Info]
 - Line-by-line field parsing
 - Basic validation for completeness
 - Automated response for missing data
-- Chart generation with `natal`
+- Comprehensive chart generation with `natal`
+- Distribution analysis (elements, modalities, polarities, hemispheres)
+- Aspect matrix visualization
+- Custom SVG symbol rendering
 - Email delivery with Postmark
 - Simple webhook integration
 
@@ -86,76 +112,123 @@ Parsing is performed line-by-line using simple regex.
 
 ### 5.3 Chart Generation
 
-- Use `natal==0.9.3`
+- Use `natal==0.9.3` for calculations
 - Accept city, region, country format (assume built-in geolocation)
-- Output a poster (e.g., PNG)
+- Generate comprehensive analysis:
+  - Planetary positions
+  - House placements
+  - Aspect calculations
+  - Distribution analysis
+- Output a high-quality A3 poster (PNG)
 
-### 5.4 Email Templates
+### 5.4 Visualization Components
 
-**Missing Information**
-> _"Dear [Name], some information is missing. Please reply using the format: First Name: ..., etc."_
-
-**Chart Delivery**
-> _"Dear [Name], your natal chart is ready! (Poster attached)"_
+- **Main Chart**:
+  - House divisions
+  - Planetary positions
+  - Zodiac signs
+  - Custom SVG symbols
+- **Aspect Matrix**:
+  - Planetary relationships
+  - Symbol-based representation
+- **Distribution Analysis**:
+  - Elements section
+  - Modalities section
+  - Polarities section
+  - Hemispheres section
+- **Design Elements**:
+  - Artistic border
+  - Corner decorations
+  - Professional typography
 
 ### 5.5 Stack Overview
 
-- **Language**: Python 3.9+
-- **Libraries**: Flask, python-postmark, natal, python-dotenv
+- **Language**: Python 3.13+
+- **Libraries**: 
+  - FastAPI for API
+  - Pillow for image processing
+  - CairoSVG for SVG rendering
+  - natal for calculations
+  - python-postmark for email
 - **Platform**: Render
 - **Version Control**: Git
 
-### 5.6 Base Refactor
+### 5.6 Services Structure
 
-- Remove OpenAI code
-- Focus webhook logic on strict parsing
-- Add `natal` integration
-- Configure Postmark templates
+- **NatalChartService**: Main chart generation
+- **ElementDistributionService**: Element analysis
+- **DistributionService**: Modality, polarity, hemisphere analysis
+- **AspectMatrixService**: Aspect matrix creation
+- **SVGPathService**: Symbol rendering
+- **ZodiacService**: Sign calculations
 
 ## 6. Clean Code Principles
 
 - **Meaningful Names**: Clear and descriptive
-- **Single Responsibility**: Small, focused functions
+- **Single Responsibility**: Each service handles one aspect
 - **Readable Code**: Minimal, meaningful comments
-- **Avoid Duplication**: Reuse logic where possible
-- **Keep it Simple**: No overengineering
-- **AI Code Review**: Manually vet AI-generated logic
+- **Avoid Duplication**: Common utilities shared
+- **Keep it Simple**: Clear service boundaries
+- **Testable Code**: Comprehensive test suite
 
 ## 7. Error Handling
 
 - If parsing fails → send missing info email
 - If `natal` fails → log error, notify user
+- If SVG rendering fails → fallback to basic symbols
 - Assume Postmark delivery is reliable
 
 ## 8. Deployment Plan
 
 - **Build Command**: `pip install -r requirements.txt`
-- **Start Command**: `gunicorn app:app`
-- **Environment Variables**: `POSTMARK_SERVER_TOKEN`, etc.
-- **Temporary Files**: Save charts to `/tmp/`, auto-cleaned
+- **Start Command**: `uvicorn src.api.main:app --host 0.0.0.0 --port $PORT`
+- **Environment Variables**: `POSTMARK_API_KEY`, etc.
+- **Assets**: SVG files in assets directory
 
 ## 9. Project Structure
 
 ```
 prof_warlock/
-├── app.py
+├── src/
+│   ├── api/
+│   │   └── main.py
+│   ├── services/
+│   │   ├── natal_chart_service.py
+│   │   ├── element_distribution_service.py
+│   │   ├── distribution_service.py
+│   │   ├── aspect_matrix_service.py
+│   │   ├── svg_path_service.py
+│   │   └── zodiac_service.py
+│   └── tests/
+│       └── test_suite.py
+├── assets/
+│   ├── svg_paths/
+│   │   └── *.svg
+│   └── template.svg
 ├── requirements.txt
-├── .env
 └── README.md
 ```
 
 ## 10. Timeline & Milestones
 
-**Total Duration**: ~2 hours
+**Total Duration**: ~1 week
 
-- **Phase 0: Setup** (10 mins)
-  - Repo init, Render app, inbound webhook
+- **Phase 0: Setup** (1 day)
+  - Repository setup
+  - Service structure
+  - Basic API endpoints
 
-- **Phase 1: Parsing & Reply** (20 mins)
-  - Email parsing + missing info reply logic
+- **Phase 1: Core Features** (2 days)
+  - Chart calculation
+  - Distribution analysis
+  - Aspect matrix
 
-- **Phase 2: Chart Generation** (60 mins)
-  - Integrate and test `natal`
+- **Phase 2: Visualization** (2 days)
+  - SVG symbol rendering
+  - Layout implementation
+  - Design integration
 
-- **Phase 3: Email Delivery & Launch** (30 mins)
-  - Attach chart and send via Postmark
+- **Phase 3: Polish & Launch** (2 days)
+  - Testing & refinement
+  - Documentation
+  - Deployment

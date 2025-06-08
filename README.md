@@ -8,7 +8,9 @@ Built for the [Postmark Challenge: Inbox Innovators](https://postmarkapp.com/blo
 
 ## ✨ What is Prof. Warlock?
 
-Prof. Warlock is an innovative email-first application that generates beautiful natal charts by simply sending an email. No complex web forms, no sign-ups - just send your birth information via email and receive a stunning A3 poster of your natal chart in return.
+Prof. Warlock is an innovative email-first application that generates beautiful natal charts by simply sending an email. No complex web forms, no sign-ups - just send your birth information via email and receive a stunning personal A3 poster of your natal chart in return.
+
+![Sample Natal Chart](sample.png)
 
 ## 🌟 Features
 
@@ -19,6 +21,14 @@ Prof. Warlock is an innovative email-first application that generates beautiful 
 - **📍 Geocoding Integration**: Automatic location coordinate lookup
 - **💌 Smart Validation**: Helpful error messages for missing information
 - **🤖 Transformer-Based Parsing**: BERT-powered email understanding
+- **📊 Distribution Analysis**: Shows planetary distributions by:
+  - Elements (Fire, Earth, Air, Water)
+  - Modalities (Cardinal, Fixed, Mutable)
+  - Polarities (Positive, Negative)
+  - Hemispheres (Left/Right, Above/Below)
+- **🔯 Aspect Matrix**: Displays planetary aspects in a beautiful matrix
+- **🎯 Custom Symbols**: Professional astrological symbols rendered in SVG
+- **🖼️ Artistic Theme**: Decorative frame with placeholders
 
 ## 🔄 User Flow
 
@@ -40,14 +50,20 @@ Prof. Warlock automatically:
 - ✅ Parses your email content
 - ✅ Validates all required fields
 - ✅ Geocodes your birth location
+- ✅ Calculates planetary positions
+- ✅ Analyzes distributions and aspects
 - ✅ Generates your natal chart
 
 ### 3. Receive Your Chart
 Within moments, you'll receive:
 - 📧 A reply email with your natal chart attached
 - 🖼️ High-quality A3 PNG poster (2480x3508px)
-- 🎨 Professional monochrome design
-- 📍 Your coordinates and birth details beautifully formatted
+- 🎨 Professional monochrome design featuring:
+  - Main natal chart with house divisions
+  - Aspect matrix showing planetary relationships
+  - Distribution analysis for elements, modalities, polarities, and hemispheres
+  - Your birth details beautifully formatted
+  - Artistic theme with placeholders
 
 ### Error Handling
 If information is missing, you'll receive a helpful email with the exact format needed:
