@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 from typing import Optional, Dict
 from datetime import datetime
 import base64
+from PIL import Image
+import io
 
 from .. import __version__
 
@@ -176,10 +178,20 @@ async def generate_natal_chart(
 
         # Generate natal chart
         chart_data_bytes = natal_chart_service.generate_chart(user_info)
-        
-        # Encode the chart data to base64
-        chart_data_base64 = base64.b64encode(chart_data_bytes).decode('utf-8')
-        
+
+        # Resize the image
+        image = Image.open(io.BytesIO(chart_data_bytes))
+        max_size = 1000
+        image.thumbnail((max_size, max_size), Image.ANTIALIAS)
+
+        # Save the resized image to bytes
+        output = io.BytesIO()
+        image.save(output, format='PNG')
+        resized_chart_data_bytes = output.getvalue()
+
+        # Encode the resized chart data to base64
+        chart_data_base64 = base64.b64encode(resized_chart_data_bytes).decode('utf-8')
+
         return {
             "status": "success",
             "data": chart_data_base64
