@@ -386,7 +386,7 @@ class NatalChartService:
         canvas.paste(moon_sign_img, (415, 2560), moon_sign_img)
 
         # Get placeholder rectangles
-        rects = NatalChartService.get_placeholder_rects(svg_content, ['name', 'birth_place', 'birth_date', 'moon_sign_name', 'sun_sign_name', 'earth', 'water', 'fire', 'air'])
+        rects = NatalChartService.get_placeholder_rects(svg_content, ['name', 'birth_place', 'birth_date', 'moon_sign_name', 'sun_sign_name', 'earth', 'water', 'fire', 'air', 'location'])
         draw = ImageDraw.Draw(canvas)
 
         # Draw each text element individually
@@ -399,6 +399,8 @@ class NatalChartService:
                 info['width'], info['height'], -info['rotation'], font, text_color
             )
             canvas.paste(rotated, pos, rotated)
+
+       
 
         if 'birth_date' in rects:
             info = rects['birth_date']
@@ -445,6 +447,21 @@ class NatalChartService:
             info = rects['name']
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw, user_name, info['center_x'] - info['width']/2, 
+                info['center_y'] - info['height']/2,
+                info['width'], info['height'], -info['rotation'], font, text_color
+            )
+            canvas.paste(rotated, pos, rotated)
+            
+         # Draw location from stats basic info
+        font = ImageFont.truetype(str(font_dir / 'Montserrat-Regular.ttf'), 24)
+        basic_info = stats.basic_info
+        if 'location' in rects and basic_info:
+            location_text = basic_info.grid[1][1]
+            
+            info = rects['location']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw, location_text,
+                info['center_x'] - info['width']/2,
                 info['center_y'] - info['height']/2,
                 info['width'], info['height'], -info['rotation'], font, text_color
             )
