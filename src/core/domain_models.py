@@ -6,6 +6,7 @@ Clean representation of core business entities.
 
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
+from pydantic import BaseModel
 
 
 @dataclass
@@ -75,4 +76,46 @@ class ValidationError:
         self.context = context or {}
     
     def __str__(self) -> str:
-        return f"{self.error_type}: {self.message}" 
+        return f"{self.error_type}: {self.message}"
+
+
+class NatalChartRequest(BaseModel):
+    """Request model for natal chart generation."""
+    first_name: str
+    last_name: str
+    birth_date: str  # Format: DD-MM-YYYY
+    birth_time: str  # Format: HH:MM
+    birth_place: str
+
+    class Config:
+        """Pydantic model configuration."""
+        json_schema_extra = {
+            "example": {
+                "first_name": "John",
+                "last_name": "Doe",
+                "birth_date": "01-01-1990",
+                "birth_time": "12:00",
+                "birth_place": "New York"
+            }
+        }
+
+
+class NatalStatsRequest(BaseModel):
+    """Request model for natal stats."""
+    birth_date: str  # Format: DD-MM-YYYY
+    birth_time: str  # Format: HH:MM
+    birth_place: str
+    today_date: Optional[str] = None  # Format: DD-MM-YYYY
+    today_time: Optional[str] = None  # Format: HH:MM
+
+    class Config:
+        """Pydantic model configuration."""
+        json_schema_extra = {
+            "example": {
+                "birth_date": "01-01-1990",
+                "birth_time": "12:00",
+                "birth_place": "New York",
+                "today_date": "04-01-2024",
+                "today_time": "15:30"
+            }
+        } 

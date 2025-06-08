@@ -1,0 +1,115 @@
+openapi: 3.1.0
+info:
+  title: Prof. Warlock API
+  description: API for generating natal charts and stats
+  version: 1.0.0
+paths:
+  /natal-chart:
+    post:
+      summary: Generate a natal chart
+      operationId: generateNatalChart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+                birth_date:
+                  type: string
+                  format: date
+                  pattern: '^\d{2}-\d{2}-\d{4}$'
+                birth_time:
+                  type: string
+                  format: time
+                  pattern: '^\d{2}:\d{2}$'
+                birth_place:
+                  type: string
+              required:
+                - first_name
+                - last_name
+                - birth_date
+                - birth_time
+                - birth_place
+      responses:
+        '200':
+          description: Natal chart generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: string
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /natal-stats:
+    post:
+      summary: Get natal stats
+      operationId: getNatalStats
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+                birth_date:
+                  type: string
+                  format: date
+                  pattern: '^\d{2}-\d{2}-\d{4}$'
+                birth_time:
+                  type: string
+                  format: time
+                  pattern: '^\d{2}:\d{2}$'
+                birth_place:
+                  type: string
+                today_date:
+                  type: string
+                  format: date
+                  pattern: '^\d{2}-\d{2}-\d{4}$'
+                today_time:
+                  type: string
+                  format: time
+                  pattern: '^\d{2}:\d{2}$'
+              required:
+                - first_name
+                - last_name
+                - birth_date
+                - birth_time
+                - birth_place
+                - today_date
+                - today_time
+      responses:
+        '200':
+          description: Natal stats retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  full_report:
+                    type: string
+                  sun_sign:
+                    type: string
+                  moon_sign:
+                    type: string
+                  rising_sign:
+                    type: string
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error 

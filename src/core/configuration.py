@@ -25,6 +25,7 @@ class EmailConfig:
 class SecurityConfig:
     """Security settings."""
     WEBHOOK_SECRET_TOKEN = os.getenv("WEBHOOK_SECRET_TOKEN")
+    API_KEY = os.getenv("API_KEY")
 
 class AppConfig:
     """Main application configuration."""
@@ -41,6 +42,7 @@ class AppConfig:
         required_env_vars = [
             ("POSTMARK_API_KEY", self.email.POSTMARK_API_KEY),
             ("WEBHOOK_SECRET_TOKEN", self.security.WEBHOOK_SECRET_TOKEN),
+            ("API_KEY", self.security.API_KEY),
         ]
         for var_name, var_value in required_env_vars:
             if not var_value:

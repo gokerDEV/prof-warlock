@@ -5,14 +5,18 @@ Clean, focused API with proper error handling and security.
 """
 
 import logging
-from fastapi import FastAPI, HTTPException, Request, Query, Depends
+from fastapi import FastAPI, HTTPException, Request, Query, Depends, Header
 from fastapi.responses import JSONResponse
-from typing import Optional
+from typing import Optional, Dict
+from datetime import datetime
+import base64
 
 from .. import __version__
 
 from ..core.configuration import config
+from ..core.domain_models import NatalChartRequest, NatalStatsRequest
 from .webhook_handler import WebhookHandler
+from ..services.natal_chart_service import NatalChartService
 
 APP_VERSION = __version__
 
@@ -30,8 +34,9 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Initialize webhook handler
+# Initialize services
 webhook_handler = WebhookHandler()
+natal_chart_service = NatalChartService()
 
 
 def verify_webhook_token(token: Optional[str] = Query(None)) -> str:
@@ -53,6 +58,27 @@ def verify_webhook_token(token: Optional[str] = Query(None)) -> str:
             detail="Unauthorized: Invalid or missing webhook token"
         )
     return token
+
+
+async def verify_api_key(x_api_key: str = Header(..., alias="X-Api-Key")) -> str:
+    """
+    Verify API key from header.
+    
+    Args:
+        x_api_key: API key from X-Api-Key header
+        
+    Returns:
+        str: Verified API key
+        
+    Raises:
+        HTTPException: If API key is invalid or missing
+    """
+    if not x_api_key or x_api_key != config.security.API_KEY:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Invalid or missing API key"
+        )
+    return x_api_key
 
 
 @app.get("/")
@@ -122,6 +148,85 @@ async def process_email_webhook(
                 "message": f"Webhook processing failed: {str(e)}"
             },
             status_code=500
+        )
+
+
+@app.post("/natal-chart")
+async def generate_natal_chart(
+    request: NatalChartRequest,
+    api_key: str = Depends(verify_api_key)
+) -> Dict:
+    """
+    Generate a natal chart based on birth information.
+    
+    Args:
+        request: Birth information for natal chart generation
+        api_key: API key for authentication
+        
+    Returns:
+        Dict: Generated natal chart data and image
+    """
+    try:
+        user_info = {
+            "First Name": request.first_name,
+            "Last Name": request.last_name,
+            "Date of Birth": f"{request.birth_date} {request.birth_time}",
+            "Place of Birth": request.birth_place
+        }
+
+        # Generate natal chart
+        chart_data_bytes = natal_chart_service.generate_chart(user_info)
+        
+        # Encode the chart data to base64
+        chart_data_base64 = base64.b64encode(chart_data_bytes).decode('utf-8')
+        
+        return {
+            "status": "success",
+            "data": chart_data_base64
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to generate natal chart: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate natal chart: {str(e)}"
+        )
+
+
+@app.post("/natal-stats")
+async def get_natal_stats(
+    request: NatalStatsRequest,
+    api_key: str = Depends(verify_api_key)
+) -> Dict:
+    """
+    Get natal stats including sun sign, moon sign, rising sign and transit information.
+    
+    Args:
+        request: Birth information and optional today's date and time
+        api_key: API key for authentication
+        
+    Returns:
+        Dict: Natal stats and transit information
+    """
+    try:
+        # Get natal stats
+        stats = await natal_chart_service.get_natal_stats(
+            birth_datetime=f"{request.birth_date} {request.birth_time}",
+            birth_place=request.birth_place,
+            today_date=request.today_date,
+            today_time=request.today_time
+        )
+        
+        return {
+            "status": "success",
+            "data": stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get natal stats: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get natal stats: {str(e)}"
         )
 
 

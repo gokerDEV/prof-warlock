@@ -7,7 +7,7 @@ This version is corrected to pass the provided test suite.
 
 import re
 import logging
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 from transformers import pipeline, Pipeline
 from natal.chart import Chart
 from io import BytesIO
@@ -600,3 +600,77 @@ class NatalChartService:
                 g.attrib['opacity'] = '0'
                 break
         return ET.tostring(root, encoding='unicode')
+
+    async def get_natal_stats(self, birth_datetime: str, birth_place: str, today_date: str, today_time: str) -> Dict:
+        """
+        Calculate natal stats including sun sign, moon sign, rising sign, and transit information.
+        
+        Args:
+            birth_datetime: Birth date and time in 'DD-MM-YYYY HH:MM' format
+            birth_place: Place of birth
+            today_date: Current date in 'DD-MM-YYYY' format
+            today_time: Current time in 'HH:MM' format
+        
+        Returns:
+            Dict: Natal stats and transit information
+        """
+        # Parse birth date and time
+        birth_dt = date_parser.parse(birth_datetime, dayfirst=True)
+
+        # Parse today's date and time
+        today_dt = date_parser.parse(f"{today_date} {today_time}", dayfirst=True)
+
+        # Geocode birth place
+        geolocator = Nominatim(user_agent="prof-warlock")
+        location = geolocator.geocode(birth_place)
+        if not location:
+            raise ValueError(f"Could not geocode location: {birth_place}")
+        lat, lon = location.latitude, location.longitude
+
+        # Initialize Zodiac service
+        zodiac = Zodiac(
+            year=birth_dt.year,
+            month=birth_dt.month,
+            day=birth_dt.day,
+            hour=birth_dt.hour,
+            minute=birth_dt.minute,
+            latitude=lat,
+            longitude=lon
+        )
+
+        # Get zodiac signs
+        sun_sign = zodiac.get_sun_sign()
+        moon_sign = zodiac.get_lunar_sign()
+        ascendant_sign = zodiac.get_ascendant_sign()
+
+        # Create natal data
+        natal_data = Data(
+            name="Natal",
+            lat=lat,
+            lon=lon,
+            utc_dt=birth_dt.strftime("%Y-%m-%d %H:%M"),
+            config=Config()
+        )
+
+        # Create transit data for today's date
+        transit_data = Data(
+            name="Transit",
+            lat=lat,
+            lon=lon,
+            utc_dt=today_dt.strftime("%Y-%m-%d %H:%M"),
+            config=Config()
+        )
+
+        # Calculate stats
+        stats = Stats(data1=natal_data, data2=transit_data)
+
+        # Generate full report in markdown
+        full_report_markdown = stats.full_report(kind="markdown")
+
+        # Return the full report and essential stats
+        return {
+            "full_report": full_report_markdown,
+            "sun_sign": sun_sign,
+            "moon_sign": moon_sign,
+            "rising_sign": ascendant_sign
+        }
