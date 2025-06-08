@@ -28,10 +28,7 @@ class ValidationService:
     def validate_email_for_processing(email: IncomingEmail) -> Optional[ValidationError]:
         """
         Validate that an email contains all required user info fields for natal chart generation.
-        Args:
-            email: The email to validate
-        Returns:
-            ValidationError if invalid, None if valid
+        If any required fields are missing, trigger an error response.
         """
         # Skip validation for PING requests
         if email.is_ping_request:

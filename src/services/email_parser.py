@@ -142,7 +142,7 @@ class EmailParsingService:
     def extract_birth_info(self, text: str) -> Dict[str, str]:
         """
         Extract birth information using transformers QA model.
-        Falls back to regex patterns if QA extraction fails.
+        If any required information is missing, trigger an email response for missing data.
         """
         try:
             # Clean and normalize text
@@ -151,16 +151,19 @@ class EmailParsingService:
             # Try transformers first
             info = self._parse_with_transformers(cleaned_text)
             
-            # If transformers failed to find some fields, try regex
-            if not all(key in info for key in ['name', 'last_name', 'birth_date', 'birth_place']):
-                regex_info = self._extract_with_regex(cleaned_text)
-                info.update({k: v for k, v in regex_info.items() if k not in info})
+            # Check if any required fields are missing
+            required_fields = ['name', 'last_name', 'birth_date', 'birth_place']
+            missing_fields = [field for field in required_fields if field not in info]
+            
+            if missing_fields:
+                # Trigger an email response for missing data
+                raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
             
             return info
             
         except Exception as e:
-            logging.error(f"Transformer extraction failed: {str(e)}, falling back to regex")
-            return self._extract_with_regex(text)
+            logging.error(f"Transformer extraction failed: {str(e)}")
+            raise
     
     def _extract_with_regex(self, text: str) -> Dict[str, str]:
         """Extract information using regex patterns as fallback."""

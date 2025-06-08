@@ -230,6 +230,12 @@ async def get_natal_stats(
         )
 
 
+@app.get("/privacy")
+async def privacy_policy():
+    """Endpoint to provide information about data privacy."""
+    return "This system does not store any data. It processes the provided information to generate insights and returns the results without retaining any data."
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler for unhandled errors."""

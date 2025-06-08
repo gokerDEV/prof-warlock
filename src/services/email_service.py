@@ -67,10 +67,23 @@ class EmailService:
         return self.send_response(response)
     
     def send_error_response(self, email: IncomingEmail, error: ValidationError) -> bool:
-        """Send an error response for validation failures."""
-        error_content = self._create_error_message(email.from_name, error)
-        subject = self._create_error_subject(error.error_type)
-        
+        """Send an error response for validation failures, including missing data errors."""
+        if error.error_type == "missing_user_info":
+            error_content = self._create_error_message(email.from_name, error)
+            subject = self._create_error_subject(error.error_type)
+        else:
+            # Extract parsed data
+            parsed_data = {
+                "First Name": email.body.get('name', '...'),
+                "Last Name": email.body.get('last_name', '...'),
+                "Date of Birth": email.body.get('birth_date', 'DD-MM-YYYY HH:MM'),
+                "Place of Birth": email.body.get('birth_place', '...')
+            }
+            
+            # Create structured message with parsed data
+            error_content = f"<p>Dear {email.from_name},</p>\n<p>There was an error processing your request: {error.message}</p>\n<p>Please provide the missing information in the format below and reply to this email:</p>\n<p>First Name: {parsed_data['First Name']}<br>Last Name: {parsed_data['Last Name']}<br>Date of Birth: {parsed_data['Date of Birth']}<br>Place of Birth: {parsed_data['Place of Birth']}</p>\n<p>Best regards,<br>Prof. Warlock</p>"
+            subject = "[Prof. Warlock] Submission Error"
+
         response = EmailResponse(
             to_email=email.from_email,
             subject=subject,
