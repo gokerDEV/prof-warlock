@@ -386,7 +386,7 @@ class NatalChartService:
         canvas.paste(moon_sign_img, (415, 2560), moon_sign_img)
 
         # Get placeholder rectangles
-        rects = NatalChartService.get_placeholder_rects(svg_content, ['name', 'birth_place', 'birth_date', 'moon_sign_name', 'sun_sign_name', 'earth', 'water', 'fire', 'air', 'location'])
+        rects = NatalChartService.get_placeholder_rects(svg_content, ['name', 'birth_place', 'birth_date', 'moon_sign_name', 'sun_sign_name', 'earth', 'water', 'fire', 'air', 'location', 'modality', 'polarity', 'hemisphere'])
         draw = ImageDraw.Draw(canvas)
 
         # Draw each text element individually
