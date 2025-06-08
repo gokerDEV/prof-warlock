@@ -12,6 +12,8 @@ from datetime import datetime
 import base64
 from PIL import Image
 import io
+import boto3
+from hashlib import sha256
 
 from .. import __version__
 
@@ -39,6 +41,14 @@ app = FastAPI(
 # Initialize services
 webhook_handler = WebhookHandler()
 natal_chart_service = NatalChartService()
+
+# Initialize S3 client
+s3_client = boto3.client(
+    's3',
+    region_name=config.s3.REGION,
+    aws_access_key_id=config.s3.ACCESS_KEY_ID,
+    aws_secret_access_key=config.s3.SECRET_ACCESS_KEY
+)
 
 
 def verify_webhook_token(token: Optional[str] = Query(None)) -> str:
@@ -181,16 +191,35 @@ async def generate_natal_chart(
 
         # Resize image
         image = Image.open(io.BytesIO(chart_data_bytes))
-        max_size = 800
+        max_size = 1500
         image.thumbnail((max_size, max_size), Image.LANCZOS)
 
-        # Encode the resized chart data to base64 with prefix
-        chart_data_base64 = base64.b64encode(image.tobytes()).decode('utf-8')
+        # Save image to bytes
+        output = io.BytesIO()
+        image.save(output, format='PNG')
+        resized_chart_data_bytes = output.getvalue()
+
+        # Create a unique filename
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        hash_digest = sha256(resized_chart_data_bytes).hexdigest()[:8]
+        filename = f"natal_charts/{timestamp}_{hash_digest}.png"
+
+        # Upload to S3
+        s3_client.put_object(
+            Bucket=config.s3.BUCKET,
+            Key=filename,
+            Body=resized_chart_data_bytes,
+            ContentType='image/png'
+        )
+
+        # Generate download link
+        download_link = f"{config.s3.PUBLIC_URL}{filename}"
 
         return JSONResponse(content=[{
             "name": "natal_chart.png",
+            "id": filename,
             "mime_type": "image/png",
-            "content": chart_data_base64
+            "download_link": download_link
         }])
     except Exception as e:
         return JSONResponse(content={

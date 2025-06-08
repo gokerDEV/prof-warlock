@@ -48,13 +48,15 @@ paths:
                     name:
                       type: string
                       example: "natal_chart.png"
+                    id:
+                      type: string
+                      example: "natal_charts/20231108123456_abcdef12.png"
                     mime_type:
                       type: string
                       example: "image/png"
-                    content:
+                    download_link:
                       type: string
-                      description: "Base64 encoded PNG image"
-                      example: "iVBORw0KGgoAAAANSUhEUgAAAAUAAAAFCAYAAACNbyblAAAAHElEQVQI12P4//8/w38GIAXDIBKE0DHxgljNBAAO9TXL0Y4OHwAAAABJRU5ErkJggg=="
+                      example: "https://kodkafa.s3.eu-central-1.amazonaws.com/natal_charts/20231108123456_abcdef12.png"
         '401':
           description: Unauthorized
         '500':
