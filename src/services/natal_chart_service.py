@@ -667,7 +667,7 @@ class NatalChartService:
                 break
         return ET.tostring(root, encoding='unicode')
 
-    async def get_natal_stats(self, birth_datetime: str, birth_place: str, today_date: str, today_time: str) -> Dict:
+    async def get_natal_stats(self, birth_datetime: str, birth_place: str, today_date: str, today_time: str, latitude: Optional[float] = None, longitude: Optional[float] = None) -> Dict:
         """
         Calculate natal stats including sun sign, moon sign, rising sign, and transit information.
         
@@ -676,6 +676,8 @@ class NatalChartService:
             birth_place: Place of birth
             today_date: Current date in 'DD-MM-YYYY' format
             today_time: Current time in 'HH:MM' format
+            latitude: Latitude for birth location (optional)
+            longitude: Longitude for birth location (optional)
         
         Returns:
             Dict: Natal stats and transit information
@@ -686,12 +688,16 @@ class NatalChartService:
         # Parse today's date and time
         today_dt = date_parser.parse(f"{today_date} {today_time}", dayfirst=True)
 
-        # Geocode birth place
-        geolocator = Nominatim(user_agent="prof-warlock")
-        location = geolocator.geocode(birth_place)
-        if not location:
-            raise ValueError(f"Could not geocode location: {birth_place}")
-        lat, lon = location.latitude, location.longitude
+        # Use provided latitude and longitude if available
+        if latitude is not None and longitude is not None:
+            lat, lon = latitude, longitude
+        else:
+            # Geocode birth place
+            geolocator = Nominatim(user_agent="prof-warlock")
+            location = geolocator.geocode(birth_place)
+            if not location:
+                raise ValueError(f"Could not geocode location: {birth_place}")
+            lat, lon = location.latitude, location.longitude
 
         # Initialize Zodiac service
         zodiac = Zodiac(
