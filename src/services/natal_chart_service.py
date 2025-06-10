@@ -465,9 +465,9 @@ class NatalChartService:
             info = rects['birth_place']
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw, user_info["Place of Birth"], 
-                info['center_x'] - info['width']/2 -180,
+                info['center_x'] - info['width']/2 - 260,
                 info['center_y'] - info['height']/2,
-                400,80, -45, font, text_color
+                600,80, -45, font, text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -478,9 +478,9 @@ class NatalChartService:
             info = rects['birth_date']
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw, date_str,
-                info['center_x'] - info['width']/2 - 200,
+                info['center_x'] - info['width']/2 - 300,
                 info['center_y'] - info['height']/2,
-                400, 80, 45, font, text_color
+                600, 80, 45, font, text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
