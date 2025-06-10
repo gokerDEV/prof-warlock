@@ -349,8 +349,8 @@
     <rect id="birth_place" x="369.7" y="2848.7" width="50" height="50"/>
     <rect id="birth_date" x="2068.1" y="2848.7" width="50" height="50"/>
     <rect id="name" x="656.8" y="3091.4" width="1156.4" height="105.6"/>
-    <rect id="moon_sign_svg" x="445.3" y="2554.1" width="200" height="200"/>
-    <rect id="sun_sign_svg" x="1823" y="2554.1" width="200" height="200"/>
+    <rect id="moon_sign_svg" x="444.7" y="2548.8" width="200" height="200"/>
+    <rect id="sun_sign_svg" x="1834.1" y="2559.4" width="200" height="200"/>
     <rect id="location" x="748.6" y="56.9" width="328.1" height="46"/>
     <rect id="hemisphere" x="55.3" y="3260" width="660" height="200"/>
     <rect id="polarity" x="758.9" y="3260" width="660" height="200"/>
