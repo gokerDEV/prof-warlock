@@ -83,9 +83,13 @@ class NatalChartRequest(BaseModel):
     """Request model for natal chart generation."""
     first_name: str
     last_name: str
-    birth_date: str  # Format: DD-MM-YYYY
+    birth_day: int
+    birth_month: int
+    birth_year: int
     birth_time: str  # Format: HH:MM
-    birth_place: str
+    birth_place: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
     class Config:
         """Pydantic model configuration."""
@@ -93,29 +97,45 @@ class NatalChartRequest(BaseModel):
             "example": {
                 "first_name": "John",
                 "last_name": "Doe",
-                "birth_date": "01-01-1990",
+                "birth_day": 1,
+                "birth_month": 1,
+                "birth_year": 1990,
                 "birth_time": "12:00",
-                "birth_place": "New York"
+                "birth_place": "New York",
+                "latitude": 40.7128,
+                "longitude": -74.0060
             }
         }
 
 
 class NatalStatsRequest(BaseModel):
     """Request model for natal stats."""
-    birth_date: str  # Format: DD-MM-YYYY
+    birth_day: int
+    birth_month: int
+    birth_year: int
     birth_time: str  # Format: HH:MM
-    birth_place: str
-    today_date: Optional[str] = None  # Format: DD-MM-YYYY
+    birth_place: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    today_day: Optional[int] = None
+    today_month: Optional[int] = None
+    today_year: Optional[int] = None
     today_time: Optional[str] = None  # Format: HH:MM
 
     class Config:
         """Pydantic model configuration."""
         json_schema_extra = {
             "example": {
-                "birth_date": "01-01-1990",
+                "birth_day": 1,
+                "birth_month": 1,
+                "birth_year": 1990,
                 "birth_time": "12:00",
                 "birth_place": "New York",
-                "today_date": "04-01-2024",
+                "latitude": 40.7128,
+                "longitude": -74.0060,
+                "today_day": 4,
+                "today_month": 1,
+                "today_year": 2024,
                 "today_time": "15:30"
             }
         } 

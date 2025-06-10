@@ -182,8 +182,10 @@ async def generate_natal_chart(
         user_info = {
             "First Name": request.first_name,
             "Last Name": request.last_name,
-            "Date of Birth": f"{request.birth_date} {request.birth_time}",
-            "Place of Birth": request.birth_place
+            "Date of Birth": f"{request.birth_day}-{request.birth_month}-{request.birth_year} {request.birth_time}",
+            "Place of Birth": request.birth_place,
+            "Latitude": request.latitude,
+            "Longitude": request.longitude
         }
 
         # Generate natal chart
@@ -246,9 +248,11 @@ async def get_natal_stats(
     try:
         # Get natal stats
         stats = await natal_chart_service.get_natal_stats(
-            birth_datetime=f"{request.birth_date} {request.birth_time}",
+            birth_datetime=f"{request.birth_day}-{request.birth_month}-{request.birth_year} {request.birth_time}",
             birth_place=request.birth_place,
-            today_date=request.today_date,
+            latitude=request.latitude,
+            longitude=request.longitude,
+            today_date=f"{request.today_day}-{request.today_month}-{request.today_year}",
             today_time=request.today_time
         )
         

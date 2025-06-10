@@ -19,22 +19,29 @@ paths:
                   type: string
                 last_name:
                   type: string
-                birth_date:
-                  type: string
-                  format: date
-                  pattern: '^\d{2}-\d{2}-\d{4}$'
+                birth_day:
+                  type: integer
+                birth_month:
+                  type: integer
+                birth_year:
+                  type: integer
                 birth_time:
                   type: string
                   format: time
                   pattern: '^\d{2}:\d{2}$'
                 birth_place:
                   type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
               required:
                 - first_name
                 - last_name
-                - birth_date
+                - birth_day
+                - birth_month
+                - birth_year
                 - birth_time
-                - birth_place
       responses:
         '200':
           description: Natal chart generated successfully
@@ -77,20 +84,28 @@ paths:
                   type: string
                 last_name:
                   type: string
-                birth_date:
-                  type: string
-                  format: date
-                  pattern: '^\d{2}-\d{2}-\d{4}$'
+                birth_day:
+                  type: integer
+                birth_month:
+                  type: integer
+                birth_year:
+                  type: integer
                 birth_time:
                   type: string
                   format: time
                   pattern: '^\d{2}:\d{2}$'
                 birth_place:
                   type: string
-                today_date:
-                  type: string
-                  format: date
-                  pattern: '^\d{2}-\d{2}-\d{4}$'
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+                today_day:
+                  type: integer
+                today_month:
+                  type: integer
+                today_year:
+                  type: integer
                 today_time:
                   type: string
                   format: time
@@ -98,11 +113,10 @@ paths:
               required:
                 - first_name
                 - last_name
-                - birth_date
+                - birth_day
+                - birth_month
+                - birth_year
                 - birth_time
-                - birth_place
-                - today_date
-                - today_time
       responses:
         '200':
           description: Natal stats retrieved successfully
