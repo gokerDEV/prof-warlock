@@ -453,8 +453,8 @@ class NatalChartService:
         sun_sign_img = sun_img.resize((sign_size, sign_size), Image.LANCZOS)
         moon_sign_img = moon_img.resize((sign_size, sign_size), Image.LANCZOS)
         
-        canvas.paste(sun_sign_img, (1830, 2560), sun_sign_img)
-        canvas.paste(moon_sign_img, (430, 2560), moon_sign_img)
+        canvas.paste(sun_sign_img, (1825, 2560), sun_sign_img)
+        canvas.paste(moon_sign_img, (430, 2550), moon_sign_img)
 
         # Get placeholder rectangles
         rects = NatalChartService.get_placeholder_rects(svg_content, ['name', 'birth_place', 'birth_date', 'moon_sign_name', 'asc_sign_name', 'sun_sign_name', 'earth', 'water', 'fire', 'air', 'location', 'modality', 'polarity', 'hemisphere'])
