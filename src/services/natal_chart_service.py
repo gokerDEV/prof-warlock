@@ -493,7 +493,7 @@ class NatalChartService:
                 draw, moon_sign.upper(),
                 info['center_x'] - info['width']/2,
                 info['center_y'] - info['height']/2,
-                info['width'], info['height'], -info['rotation'], font, text_color, 170
+                info['width'], info['height'], -info['rotation'], font, text_color, 150
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -515,7 +515,7 @@ class NatalChartService:
                 draw, sun_sign.upper(),
                 info['center_x'] - info['width']/2,
                 info['center_y'] - info['height']/2,
-                info['width'], info['height'], -info['rotation'], font, text_color, 170
+                info['width'], info['height'], -info['rotation'], font, text_color, 150
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -552,7 +552,7 @@ class NatalChartService:
                 draw, location_text,
                 info['center_x'] - info['width']/2,
                 info['center_y'] - info['height']/2,
-                info['width'], info['height'], -info['rotation'], font, text_color
+                info['width'], info['height'], -info['rotation'], font, text_color, 1000
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)

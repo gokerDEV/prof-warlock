@@ -78,7 +78,7 @@ class AspectMatrixService:
                     matrix_canvas.paste(rotated_label, (px, py), rotated_label)
 
         # Draw column labels (bottom)
-        for j in range(size-1):
+        for j in range(1,size-1):
             x = j * cell
             y = size * cell
             matrix_draw.rectangle([x, y, x + cell, y + cell], 
