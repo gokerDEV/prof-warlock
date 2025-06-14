@@ -27,6 +27,7 @@ from natal.stats import Stats
 from .aspect_matrix_service import AspectMatrixService
 from .element_distribution_service import ElementDistributionService
 from .distribution_service import DistributionService
+from .qr_code_service import QRCodeService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -443,7 +444,9 @@ class NatalChartService:
                                                         'positive', 'negative',
                                                         'name',
                                                         'north','east',
-                                                        'cardinal', 'fixed', 'mutable'])
+                                                        'cardinal', 'fixed', 'mutable',
+                                                        'qr-code'
+                                                        ])
         draw = ImageDraw.Draw(canvas)
         
         
@@ -648,6 +651,41 @@ class NatalChartService:
             svg_paths_dir=svg_paths_dir
         )
 
+        # Generate and place QR code if qr-code rect exists
+        if 'qr-code' in rects:
+            info = rects['qr-code']
+            # Generate QR code URL (you can customize this URL)
+            qr_url = f"https://prof-warlock.com/chart/{user_name.replace(' ', '-').lower()}"
+            
+            try:
+                # Generate QR code SVG
+                qr_svg = QRCodeService.generate_qr_code(
+                    url=qr_url,
+                    size=int(info['width']),
+                    fill_color="#000000",
+                    background_color="#ffffff"
+                )
+                
+                # Convert SVG to PNG - ensure SVG string is properly encoded to bytes
+                qr_png = cairosvg.svg2png(
+                    bytestring=qr_svg.encode('utf-8'),
+                    output_width=int(info['width']),
+                    output_height=int(info['height'])
+                )
+                
+                # Create QR code image
+                qr_img = Image.open(BytesIO(qr_png)).convert("RGBA")
+                
+                # Place QR code on canvas
+                canvas.paste(
+                    qr_img,
+                    (int(info['center_x'] - info['width']/2),
+                     int(info['center_y'] - info['height']/2)),
+                    qr_img
+                )
+            except Exception as e:
+                logger.error(f"Error generating QR code: {e}")
+                # Continue without QR code if there's an error
 
         buf = BytesIO()
         canvas.save(buf, format="PNG")

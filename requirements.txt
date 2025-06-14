@@ -42,3 +42,5 @@ torch>=2.6.0
 
 # AWS S3 integration
 boto3==1.28.0
+
+qrcode==7.4.2
