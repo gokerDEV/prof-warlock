@@ -332,6 +332,7 @@ class NatalChartService:
         sun_sign = zodiac.get_sun_sign()
         moon_sign = zodiac.get_lunar_sign()
         ascendant_sign = zodiac.get_ascendant_sign()
+        chart_ruler = zodiac.get_chart_ruler()
 
         base_path = Path(__file__).resolve().parent
         assets_path = base_path / '../../assets'
@@ -536,6 +537,18 @@ class NatalChartService:
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
+                
+        if 'chart-ruler' in rects:
+            info = rects['chart-ruler']
+            DistributionService._draw_icon(
+                draw=draw,
+                name=chart_ruler,
+                x=int(info['center_x'] - info['width']/2),
+                y=int(info['center_y'] - info['height']/2),
+                width=info['width'],
+                height=info['height'],
+                svg_paths_dir=svg_paths_dir
+            )
             
         # Draw element distribution
         ElementDistributionService.draw_element_distribution(

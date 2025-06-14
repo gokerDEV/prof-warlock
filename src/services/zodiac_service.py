@@ -42,6 +42,13 @@ class Zodiac:
         if self.data.asc:
             return self.data.asc.sign.name
         return "aries"  # fallback to aries if not found
+    
+    
+    def get_chart_ruler(self) -> str:
+        """Get the chart ruler"""
+        if self.data.sun.sign.classic_ruler:
+            return self.data.sun.sign.classic_ruler
+        return "aries"  # fallback to aries if not found
 
 # # --- Example Usage ---
 # birth_chart = Zodiac(

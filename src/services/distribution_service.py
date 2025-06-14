@@ -6,7 +6,7 @@ Handles the rendering of modality, polarity and hemisphere distributions using S
 
 import logging
 from PIL import ImageDraw, Image
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from natal.stats import Stats
 from .distribution_utils import DistributionUtils
 from .svg_path_service import SVGPathService
@@ -29,6 +29,24 @@ class DistributionService:
     # Symbol settings
     SYMBOL_SIZE = 40
     SYMBOL_SPACING = 5
+    ICON_SIZE = 60  # Larger size for chart ruler icon
+    
+    @staticmethod
+    def _draw_icon(draw: ImageDraw, name: str, x: int, y: int, width: int, height: int, svg_paths_dir: str) -> None:
+        """Draw a single SVG icon centered in the given area."""
+        # Load SVG files
+        SVGPathService._load_svg_files(svg_paths_dir)
+        
+        print('NAME', name)
+    
+        # Render the symbol
+        if sym_img := SVGPathService.render_symbol(name, size=DistributionService.ICON_SIZE, color=DistributionService.TEXT_COLOR):
+            # Calculate center position
+            paste_x = int(x + (width - sym_img.width) // 2)
+            paste_y = int(y + (height - sym_img.height) // 2)
+            
+            # Paste the symbol
+            draw._image.paste(sym_img, (paste_x, paste_y), sym_img)
     
     @staticmethod
     def _draw_category_line(draw: ImageDraw, bodies: List[str], x: int, y: int, width: int, height: int, svg_paths_dir: str) -> int:
