@@ -420,32 +420,32 @@ class TestTransformers:
 
 # Chart Generation Tests
 class TestChartGeneration:
-    def test_zodiac_sign_determination(self):
-        """Test zodiac sign determination for different birth dates."""
-        test_cases = [
-            ("15-03-2000 12:00", "Pisces"),  # March 15
-            ("21-03-2000 12:00", "Aries"),   # March 21 - Aries starts
-            ("19-04-2000 12:00", "Aries"),   # April 19 - Aries ends
-            ("20-04-2000 12:00", "Taurus"),  # April 20 - Taurus starts
-            ("22-12-2000 12:00", "Capricorn"),  # December 22 - Capricorn starts
-            ("19-01-2000 12:00", "Capricorn"),  # January 19 - Capricorn ends
-            ("20-01-2000 12:00", "Aquarius"),   # January 20 - Aquarius starts
-        ]
+    # def test_zodiac_sign_determination(self):
+    #     """Test zodiac sign determination for different birth dates."""
+    #     test_cases = [
+    #         ("15-03-2000 12:00", "Pisces"),  # March 15
+    #         ("21-03-2000 12:00", "Aries"),   # March 21 - Aries starts
+    #         ("19-04-2000 12:00", "Aries"),   # April 19 - Aries ends
+    #         ("20-04-2000 12:00", "Taurus"),  # April 20 - Taurus starts
+    #         ("22-12-2000 12:00", "Capricorn"),  # December 22 - Capricorn starts
+    #         ("19-01-2000 12:00", "Capricorn"),  # January 19 - Capricorn ends
+    #         ("20-01-2000 12:00", "Aquarius"),   # January 20 - Aquarius starts
+    #     ]
 
-        for date_str, expected_sign in test_cases:
-            dt = datetime.strptime(date_str, "%d-%m-%Y %H:%M")
-            sign, path = NatalChartService._get_zodiac_sign(dt)
-            assert sign == expected_sign
-            assert os.path.exists(path)
-            assert path.endswith(f"{expected_sign.lower()}.svg")
+    #     for date_str, expected_sign in test_cases:
+    #         dt = datetime.strptime(date_str, "%d-%m-%Y %H:%M")
+    #         sign, path = NatalChartService._get_zodiac_sign(dt)
+    #         assert sign == expected_sign
+    #         assert os.path.exists(path)
+    #         assert path.endswith(f"{expected_sign.lower()}.svg")
 
     def test_chart_generation(self):
         """Test full chart generation with zodiac sign integration."""
         user_info = {
-            "First Name": "John",
-            "Last Name": "Doe",
-            "Date of Birth": "21-03-1990 12:00",  # Aries at noon
-            "Place of Birth": "New York, USA"
+            "First Name": "Göker",
+            "Last Name": "Cebeci",
+            "Date of Birth": "18-08-1983 13:30",  # Aries at noon
+            "Place of Birth": "Edirne, TR"
         }
         
         chart_png = NatalChartService.generate_chart(user_info)

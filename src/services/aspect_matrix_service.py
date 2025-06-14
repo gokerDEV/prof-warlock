@@ -17,7 +17,7 @@ class AspectMatrixService:
     TOP = 2600
 
     @staticmethod
-    def draw_aspect_matrix(draw: ImageDraw, grid: List[List[str]], width: int, svg_paths_dir: str) -> None:
+    def draw_aspect_matrix(draw: ImageDraw, grid: List[List[str]], center_x: float, center_y: float, svg_paths_dir: str) -> None:
         """
         Draws the aspect matrix based on the specified rotation logic.
         1. Creates a lower-triangle matrix with labels.
@@ -31,7 +31,7 @@ class AspectMatrixService:
             return
         
         size = len(grid[0])
-        cell = SVGPathService.CELL_SIZE
+        cell = int(SVGPathService.CELL_SIZE)
         icon_size = int(cell * 0.8)  
         label_size = int(cell * 0.8)  
         planet_row = grid[0] 
@@ -43,8 +43,8 @@ class AspectMatrixService:
         # Draw matrix cells and icons
         for i in range(1,size):
             for j in range(i - 1):
-                x = (j + 1) * cell 
-                y = i * cell
+                x = int((j + 1) * cell)
+                y = int(i * cell)
                 
                 matrix_draw.rectangle([x, y, x + cell, y + cell], 
                                     outline=SVGPathService.BORDER_COLOR,
@@ -56,14 +56,14 @@ class AspectMatrixService:
                     sym_img = SVGPathService.render_symbol(filename, size=icon_size)
                     if sym_img:
                         rotated_sym = sym_img.rotate(135, expand=True, resample=Image.BICUBIC)
-                        px = x + (cell - rotated_sym.width) // 2
-                        py = y + (cell - rotated_sym.height) // 2
+                        px = int(x + (cell - rotated_sym.width) // 2)
+                        py = int(y + (cell - rotated_sym.height) // 2)
                         matrix_canvas.paste(rotated_sym, (px, py), rotated_sym)
 
         # Draw row labels (left side)
         for i in range(2, size):
             x = 0
-            y = i * cell
+            y = int(i * cell)
             matrix_draw.rectangle([x, y, x + cell, y + cell], 
                                 outline=SVGPathService.BORDER_COLOR,
                                 width=SVGPathService.BORDER_WIDTH)
@@ -73,14 +73,14 @@ class AspectMatrixService:
                 label_img = SVGPathService.render_symbol(filename, size=label_size)
                 if label_img:
                     rotated_label = label_img.rotate(90, expand=True, resample=Image.BICUBIC)
-                    px = x + (cell - rotated_label.width) // 2
-                    py = y + (cell - rotated_label.height) // 2
+                    px = int(x + (cell - rotated_label.width) // 2)
+                    py = int(y + (cell - rotated_label.height) // 2)
                     matrix_canvas.paste(rotated_label, (px, py), rotated_label)
 
         # Draw column labels (bottom)
         for j in range(1,size-1):
-            x = j * cell
-            y = size * cell
+            x = int(j * cell)
+            y = int(size * cell)
             matrix_draw.rectangle([x, y, x + cell, y + cell], 
                                 outline=SVGPathService.BORDER_COLOR,
                                 width=SVGPathService.BORDER_WIDTH)
@@ -90,14 +90,14 @@ class AspectMatrixService:
                 label_img = SVGPathService.render_symbol(filename, size=label_size)
                 if label_img:
                     rotated_label = label_img.rotate(180, expand=True, resample=Image.BICUBIC)
-                    px = x + (cell - rotated_label.width) // 2
-                    py = y + (cell - rotated_label.height) // 2
+                    px = int(x + (cell - rotated_label.width) // 2)
+                    py = int(y + (cell - rotated_label.height) // 2)
                     matrix_canvas.paste(rotated_label, (px, py), rotated_label)
 
         final_image = matrix_canvas.rotate(-135, expand=True, resample=Image.BICUBIC)
 
-        paste_x = (width - final_image.width) // 2
-        paste_y = 2260
+        paste_x = int(center_x - final_image.width // 2)
+        paste_y = int(center_y - 143)
         draw._image.paste(final_image, (paste_x, paste_y), final_image)
 
     @staticmethod

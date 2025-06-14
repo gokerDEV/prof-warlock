@@ -151,49 +151,49 @@ class NatalChartService:
 
         return matches
 
-    @staticmethod
-    def _get_zodiac_sign(birth_date: datetime) -> Tuple[str, str]:
-        """
-        Determine zodiac sign from birth date.
-        Returns a tuple of (sign_name, sign_file_path) as required by the tests.
-        """
-        zodiac_dates = [
-            ((3, 21), (4, 19), "Aries"),
-            ((4, 20), (5, 20), "Taurus"),
-            ((5, 21), (6, 20), "Gemini"),
-            ((6, 21), (7, 22), "Cancer"),
-            ((7, 23), (8, 22), "Leo"),
-            ((8, 23), (9, 22), "Virgo"),
-            ((9, 23), (10, 22), "Libra"),
-            ((10, 23), (11, 21), "Scorpio"),
-            ((11, 22), (12, 21), "Sagittarius"),
-            ((12, 22), (1, 19), "Capricorn"),
-            ((1, 20), (2, 18), "Aquarius"),
-            ((2, 19), (3, 20), "Pisces")
-        ]
+    # @staticmethod
+    # def _get_zodiac_sign(birth_date: datetime) -> Tuple[str, str]:
+    #     """
+    #     Determine zodiac sign from birth date.
+    #     Returns a tuple of (sign_name, sign_file_path) as required by the tests.
+    #     """
+    #     zodiac_dates = [
+    #         ((3, 21), (4, 19), "Aries"),
+    #         ((4, 20), (5, 20), "Taurus"),
+    #         ((5, 21), (6, 20), "Gemini"),
+    #         ((6, 21), (7, 22), "Cancer"),
+    #         ((7, 23), (8, 22), "Leo"),
+    #         ((8, 23), (9, 22), "Virgo"),
+    #         ((9, 23), (10, 22), "Libra"),
+    #         ((10, 23), (11, 21), "Scorpio"),
+    #         ((11, 22), (12, 21), "Sagittarius"),
+    #         ((12, 22), (1, 19), "Capricorn"),
+    #         ((1, 20), (2, 18), "Aquarius"),
+    #         ((2, 19), (3, 20), "Pisces")
+    #     ]
 
-        month = birth_date.month
-        day = birth_date.day
-        sign = "Capricorn" # Default value
+    #     month = birth_date.month
+    #     day = birth_date.day
+    #     sign = "Capricorn" # Default value
 
-        for (start_m, start_d), (end_m, end_d), current_sign in zodiac_dates:
-            if current_sign == "Capricorn":
-                if (month == 12 and day >= start_d) or (month == 1 and day <= end_d):
-                    sign = current_sign
-                    break
-            else:
-                if (month == start_m and day >= start_d) or \
-                   (month == end_m and day <= end_d):
-                    sign = current_sign
-                    break
+    #     for (start_m, start_d), (end_m, end_d), current_sign in zodiac_dates:
+    #         if current_sign == "Capricorn":
+    #             if (month == 12 and day >= start_d) or (month == 1 and day <= end_d):
+    #                 sign = current_sign
+    #                 break
+    #         else:
+    #             if (month == start_m and day >= start_d) or \
+    #                (month == end_m and day <= end_d):
+    #                 sign = current_sign
+    #                 break
         
-        # This part must be here to satisfy the test's expectation of a file path.
-        # Assuming the assets folder is two levels up as in the original code.
-        sign_file = sign.lower() + ".svg"
-        # Using os.path.join to match the original implementation exactly.
-        sign_path = os.path.join(os.path.dirname(__file__), '../../assets/zodiac', sign_file)
+    #     # This part must be here to satisfy the test's expectation of a file path.
+    #     # Assuming the assets folder is two levels up as in the original code.
+    #     sign_file = sign.lower() + ".svg"
+    #     # Using os.path.join to match the original implementation exactly.
+    #     sign_path = os.path.join(os.path.dirname(__file__), '../../assets/zodiac', sign_file)
         
-        return sign, sign_path
+    #     return sign, sign_path
 
     @staticmethod
     def _flexible_parse_date(date_str: str) -> str:
@@ -216,7 +216,7 @@ class NatalChartService:
         """Helper function to draw rotated and centered text in a box, optionally along an arc."""
         if arc is not None:
             radius = abs(arc)
-            center_x, center_y = x + arc /2, y + arc
+            center_x, center_y = abs(x) + arc /2, abs(y) + arc
 
             try:
                 total_text_width = font.getlength(text)
@@ -291,7 +291,7 @@ class NatalChartService:
         AspectMatrixService.draw_aspect_matrix(draw, grid, center_x, center_y, svg_paths_dir)
 
     @staticmethod
-    def generate_chart(user_info: Dict[str, str], font_size: int = 48, text_color: tuple = (30, 30, 30, 255)) -> bytes:
+    def generate_chart(user_info: Dict[str, str], template: str = '1', background_color: str = "#ffffff", font_size: int = 48, text_color: tuple = (30, 30, 30, 255)) -> bytes:
         """Generate a natal chart PNG, corrected to pass tests and accept flexible date formats."""
         date_str = user_info["Date of Birth"]
         if not date_str or date_str == "invalid-date":
@@ -307,11 +307,15 @@ class NatalChartService:
         except Exception:
             raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
 
-        geolocator = Nominatim(user_agent="prof-warlock-test-suite")
-        location = geolocator.geocode(user_info["Place of Birth"])
-        if not location:
-            raise ValueError(f"Could not geocode location: {user_info['Place of Birth']}")
-        lat, lon = location.latitude, location.longitude
+        # Lat, Long first if it is exists
+        if user_info.get("Latitude") and user_info.get("Longitude"):
+            lat, lon = user_info["Latitude"], user_info["Longitude"]
+        else:   
+            geolocator = Nominatim(user_agent="prof-warlock-test-suite")
+            location = geolocator.geocode(user_info["Place of Birth"])
+            if not location:
+                raise ValueError(f"Could not geocode location: {user_info['Place of Birth']}")
+            lat, lon = location.latitude, location.longitude
 
         # Initialize Zodiac service
         zodiac = Zodiac(
@@ -351,7 +355,7 @@ class NatalChartService:
         sun_img = Image.open(BytesIO(sun_svg)).convert("RGBA")
         moon_img = Image.open(BytesIO(moon_svg)).convert("RGBA")
 
-        template_path = assets_path / 'template.svg'
+        template_path = assets_path / f'template_{template}.svg'
         with open(template_path, 'r') as f:
             svg_content = f.read()
 
@@ -366,7 +370,7 @@ class NatalChartService:
         config = Config(
             chart=ChartConfig(stroke_width=1, ring_thickness_fraction=0.15)
         )
-        config.theme.background = "#fcf2de"
+        config.theme.background = background_color
         config.theme.foreground = "#393939"
         config.theme.fire = "#393939"
         config.theme.earth = "#393939"
@@ -444,9 +448,7 @@ class NatalChartService:
         # chart_y = coord_y + h_latlon + 60
         canvas.paste(chart_img, (190, 190), chart_img)
 
-        # Draw the aspect matrix in the center
         svg_paths_dir = os.path.join(assets_path, 'svg_paths')
-        AspectMatrixService.draw_aspect_matrix(ImageDraw.Draw(canvas), grid, a3_width, svg_paths_dir)
 
         # Place zodiac signs
         sign_size = 220
@@ -457,65 +459,80 @@ class NatalChartService:
         canvas.paste(moon_sign_img, (430, 2550), moon_sign_img)
 
         # Get placeholder rectangles
-        rects = NatalChartService.get_placeholder_rects(svg_content, ['name', 'birth_place', 'birth_date', 'moon_sign_name', 'asc_sign_name', 'sun_sign_name', 'earth', 'water', 'fire', 'air', 'location', 'modality', 'polarity', 'hemisphere'])
+        rects = NatalChartService.get_placeholder_rects(svg_content, 
+                                                        [
+                                                        'earth', 'water', 'fire', 'air', 
+                                                        'chart','chart-ruler','aspect',
+                                                        'sun-sign', 'moon-sign', 'rise-sign',  
+                                                        'birth-place', 'birth-date', 
+                                                        'positive', 'negative',
+                                                        'name',
+                                                        'north','east',
+                                                        'cardinal', 'fixed', 'mutable'])
         draw = ImageDraw.Draw(canvas)
+        
+        
+        if 'aspect' in rects:
+            info = rects['aspect']
+            # Draw the aspect matrix in the center
+            print('INFO', info)
+            AspectMatrixService.draw_aspect_matrix(ImageDraw.Draw(canvas), grid, info['center_x'], info['center_y'], svg_paths_dir)
 
         # Draw each text element individually
-        if 'birth_place' in rects:
-            info = rects['birth_place']
+        if 'birth-place' in rects:
+            info = rects['birth-place']
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw, user_info["Place of Birth"], 
-                info['center_x'] - info['width']/2 - 260,
+                info['center_x'] - info['width']/2,
                 info['center_y'] - info['height']/2,
-                600,80, -45, font, text_color
+                info['width'], info['height'], info['rotation'], font, text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
 
        
-
-        if 'birth_date' in rects:
-            info = rects['birth_date']
+        if 'birth-date' in rects:
+            info = rects['birth-date']
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw, date_str,
-                info['center_x'] - info['width']/2 - 300,
+                info['center_x'] - info['width']/2,
                 info['center_y'] - info['height']/2,
-                600, 80, 45, font, text_color
+                info['width'], info['height'], info['rotation'], font, text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
 
         font = ImageFont.truetype(font_family_bold, 28)
 
-        if 'moon_sign_name' in rects:
-            info = rects['moon_sign_name']
+        if 'moon-sign' in rects:
+            info = rects['moon-sign']
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw, moon_sign.upper(),
                 info['center_x'] - info['width']/2,
                 info['center_y'] - info['height']/2,
-                info['width'], info['height'], -info['rotation'], font, text_color, 150
+                info['width'], info['height'], 0, font, text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
             
-        if 'asc_sign_name' in rects:
-            info = rects['asc_sign_name']
+        if 'rise-sign' in rects:
+            info = rects['rise-sign']
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw, ascendant_sign.upper(),
                 info['center_x'] - info['width']/2,
                 info['center_y'] - info['height']/2,
-                info['width'], info['height'], -info['rotation'], font, text_color
+                info['width'], info['height'], 0, font, text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
 
-        if 'sun_sign_name' in rects:
-            info = rects['sun_sign_name']
+        if 'sun-sign' in rects:
+            info = rects['sun-sign']
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw, sun_sign.upper(),
                 info['center_x'] - info['width']/2,
                 info['center_y'] - info['height']/2,
-                info['width'], info['height'], -info['rotation'], font, text_color, 150
+                info['width'], info['height'], 0, font, text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -530,13 +547,14 @@ class NatalChartService:
 
  
         
-        font = ImageFont.truetype(font_family_bold, 72)
+        font = ImageFont.truetype(font_family_bold, 54)
         if 'name' in rects:
             info = rects['name']
             rotated, pos = NatalChartService._draw_rotated_text(
-                draw, user_name, info['center_x'] - info['width']/2, 
+                draw, user_name, 
+                info['center_x'] - info['width']/2, 
                 info['center_y'] - info['height']/2,
-                info['width'], info['height'], -info['rotation'], font, text_color
+                info['width'], info['height'], 0, font, text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -544,15 +562,26 @@ class NatalChartService:
          # Draw location from stats basic info
         font = ImageFont.truetype(font_family_regular, 24)
         basic_info = stats.basic_info
-        if 'location' in rects and basic_info:
-            location_text = basic_info.grid[1][1]
-            
-            info = rects['location']
+        north, east = basic_info.grid[1][1].split(' ')
+        
+        if 'north' in rects and basic_info:
+            info = rects['north']
             rotated, pos = NatalChartService._draw_rotated_text(
-                draw, location_text,
+                draw, north,
                 info['center_x'] - info['width']/2,
                 info['center_y'] - info['height']/2,
-                info['width'], info['height'], -info['rotation'], font, text_color, 1000
+                info['width'], info['height'], 0, font, text_color
+            )
+            if rotated is not None:
+                canvas.paste(rotated, pos, rotated)
+                
+        if 'east' in rects and basic_info:
+            info = rects['east']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw, east,
+                info['center_x'] - info['width']/2,
+                info['center_y'] - info['height']/2,
+                info['width'], info['height'], 0, font, text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -746,3 +775,4 @@ class NatalChartService:
             "moon_sign": moon_sign,
             "rising_sign": ascendant_sign
         }
+        
