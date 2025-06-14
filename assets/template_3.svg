@@ -84,9 +84,9 @@
     <rect id="moon-sign-svg" x="707.4" y="2591" width="200" height="200"/>
     <rect id="sun-sign-svg" x="1580.3" y="2599" width="200" height="200"/>
     <rect id="hemisphere" x="440.8" y="3567.6" width="660" height="200"/>
-    <rect id="polarity" x="558.1" y="3429" width="420" height="45"/>
-    <rect id="polarity1" x="1030.1" y="3429" width="420" height="45"/>
-    <rect id="polarity2" x="1502" y="3429" width="420" height="45"/>
+    <rect id="mutable" x="558.1" y="3429" width="420" height="45"/>
+    <rect id="fixed" x="1030.1" y="3429" width="420" height="45"/>
+    <rect id="cardinal" x="1502" y="3429" width="420" height="45"/>
     <rect id="modality" x="1165.4" y="3627" width="660" height="200"/>
     <rect id="qr-code" class="st10" x="95.4" y="3227.5" width="191.8" height="190.4"/>
     <rect id="chart" x="1215" y="1186" width="50" height="50"/>

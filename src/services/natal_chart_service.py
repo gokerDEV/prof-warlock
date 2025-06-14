@@ -592,7 +592,6 @@ class NatalChartService:
             draw=draw,
             stats=stats,
             rects=rects,
-            font=font,
             svg_paths_dir=svg_paths_dir
         )
 
@@ -601,18 +600,9 @@ class NatalChartService:
             draw=draw,
             stats=stats,
             rects=rects,
-            font=font,
             svg_paths_dir=svg_paths_dir
         )
 
-        # Draw hemisphere distribution
-        DistributionService.draw_hemisphere_distribution(
-            draw=draw,
-            stats=stats,
-            rects=rects,
-            font=font,
-            svg_paths_dir=svg_paths_dir
-        )
 
         buf = BytesIO()
         canvas.save(buf, format="PNG")
