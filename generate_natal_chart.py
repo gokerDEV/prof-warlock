@@ -39,10 +39,11 @@ def main():
         "Longitude": args.longitude
     }
     
+    # fcf2de
     try:
         # Generate the chart
         chart_service = NatalChartService()
-        chart_bytes = chart_service.generate_chart(user_info, template=args.template, background_color="#fcf2de")
+        chart_bytes = chart_service.generate_chart(user_info, template=args.template, background_color="#ffffff")
         
         # Save the chart
         with open(args.output, 'wb') as f:

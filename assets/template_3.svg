@@ -69,18 +69,18 @@
     <g id="bg-color">
       <rect class="st8" width="2481.9" height="3509.9"/>
     </g>
-    <rect id="earth" x="198.2" y="203" width="250" height="250"/>
+    <rect id="fire" x="198.2" y="203" width="250" height="250"/>
     <rect id="air" x="2031.9" y="203" width="250" height="250"/>
-    <rect id="fire" x="198.2" y="2023.7" width="250" height="250"/>
-    <rect id="water" x="2031.9" y="2023.7" width="250" height="250"/>
-    <rect id="sun-sign" x="803.1" y="2479.7" width="250" height="36"/>
-    <rect id="rise-sign" x="1115.6" y="2479.7" width="250" height="36"/>
-    <rect id="moon-sign" x="1428.2" y="2479.7" width="250" height="36"/>
-    <rect id="birth-place" x="108.1" y="2895.6" width="620" height="75"/>
+    <rect id="earth" x="148.2" y="2073.7" width="250" height="250"/>
+    <rect id="water" x="2081.9" y="2073.7" width="250" height="250"/>
+    <rect id="sun-sign" x="803.1" y="2477.7" width="250" height="36"/>
+    <rect id="rise-sign" x="1115.6" y="2477.7" width="250" height="36"/>
+    <rect id="moon-sign" x="1428.2" y="2477.7" width="250" height="36"/>
+    <rect id="birth-place" x="108.1" y="2889.6" width="620" height="75"/>
     <rect id="positive" x="108.1" y="3075.2" width="470" height="75"/>
-    <rect id="birth-date" x="1752.3" y="2895.2" width="620" height="75"/>
+    <rect id="birth-date" x="1752.3" y="2889.2" width="620" height="75"/>
     <rect id="negative" x="1901" y="3075.8" width="470" height="75"/>
-    <rect id="name" x="740" y="3343.2" width="1000" height="60"/>
+    <rect id="name" x="740" y="3340.2" width="1000" height="60"/>
     <rect id="moon-sign-svg" x="707.4" y="2591" width="200" height="200"/>
     <rect id="sun-sign-svg" x="1580.3" y="2599" width="200" height="200"/>
     <rect id="hemisphere" x="440.8" y="3567.6" width="660" height="200"/>
@@ -89,9 +89,9 @@
     <rect id="cardinal" x="1502" y="3429" width="420" height="45"/>
     <rect id="modality" x="1165.4" y="3627" width="660" height="200"/>
     <rect id="qr-code" class="st10" x="95.4" y="3227.5" width="191.8" height="190.4"/>
-    <rect id="chart" x="1215" y="1186" width="50" height="50"/>
-    <rect id="east" x="378" y="3361.6" width="96.8" height="24.2"/>
-    <rect id="north" x="2001.7" y="3361.6" width="96.8" height="24.2"/>
+    <rect id="chart" x="1215" y="1209" width="50" height="50"/>
+    <rect id="east" x="358" y="3350.6" width="116.8" height="30.2"/>
+    <rect id="north" x="2001.7" y="3350.6" width="116.8" height="30.2"/>
     <rect id="chart-ruler" x="1215" y="2567.8" width="50" height="50"/>
     <rect id="aspect" x="1215" y="2662.3" width="50" height="50"/>
   </g>

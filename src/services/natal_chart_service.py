@@ -407,32 +407,7 @@ class NatalChartService:
         cross_ref_data = stats.cross_ref
         grid = cross_ref_data.grid
         
-        # Create chart
-        chart = Chart(
-            data1=mimi,
-            # data2=transit,
-            width=2000
-        )
-        svg_str = chart.svg
-        
-        # Convert to PNG
-        chart_size = 2100
-        chart_png = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=chart_size, output_height=chart_size)
-        
-        # Create base chart image
-        chart_img = Image.open(BytesIO(chart_png)).convert("RGBA")
-        draw = ImageDraw.Draw(chart_img)
-        
-        # Calculate center position for aspect matrix
-        # w, h = chart_img.size
-        # center_x = w // 2
-        # center_y = h // 2
-        
-        
-        # Convert back to PNG for further processing
-        chart_buf = BytesIO()
-        chart_img.save(chart_buf, format="PNG")
-        chart_png = chart_buf.getvalue()
+
         
         # Create canvas
         a3_width, a3_height = 2480, 3508
@@ -447,7 +422,6 @@ class NatalChartService:
         # bbox = ImageDraw.Draw(canvas).textbbox((0, 0), f"{lat:.4f}, {lon:.4f}", font=font)
         # h_latlon = bbox[3] - bbox[1]
         # chart_y = coord_y + h_latlon + 60
-        canvas.paste(chart_img, (190, 190), chart_img)
 
         svg_paths_dir = os.path.join(assets_path, 'svg_paths')
 
@@ -473,32 +447,62 @@ class NatalChartService:
         draw = ImageDraw.Draw(canvas)
         
         
+        if 'chart' in rects:
+            chart_size = 2250
+            info = rects['chart']
+            # Create chart
+            chart = Chart(
+                data1=mimi,
+                # data2=transit,
+                width=chart_size
+            )
+            svg_str = chart.svg
+            chart_png = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=chart_size, output_height=chart_size)
+            
+            # Create base chart image
+            chart_img = Image.open(BytesIO(chart_png)).convert("RGBA")
+            draw = ImageDraw.Draw(chart_img)
+            
+            # Convert back to PNG for further processing
+            chart_buf = BytesIO()
+            chart_img.save(chart_buf, format="PNG")
+            chart_png = chart_buf.getvalue()
+            canvas.paste(chart_img, (int(info['center_x'] - chart_size/2), int(info['center_y'] - chart_size/2)), chart_img)
+        
         if 'aspect' in rects:
             info = rects['aspect']
             # Draw the aspect matrix in the center
-            print('INFO', info)
             AspectMatrixService.draw_aspect_matrix(ImageDraw.Draw(canvas), grid, info['center_x'], info['center_y'], svg_paths_dir)
 
         # Draw each text element individually
         if 'birth-place' in rects:
             info = rects['birth-place']
             rotated, pos = NatalChartService._draw_rotated_text(
-                draw, user_info["Place of Birth"], 
-                info['center_x'] - info['width']/2,
-                info['center_y'] - info['height']/2,
-                info['width'], info['height'], info['rotation'], font, text_color
+                draw=ImageDraw.Draw(canvas), 
+                text=user_info["Place of Birth"], 
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'], 
+                height=info['height'], 
+                angle=info['rotation'], 
+                font=font, 
+                fill=text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
 
-       
         if 'birth-date' in rects:
             info = rects['birth-date']
             rotated, pos = NatalChartService._draw_rotated_text(
-                draw, date_str,
-                info['center_x'] - info['width']/2,
-                info['center_y'] - info['height']/2,
-                info['width'], info['height'], info['rotation'], font, text_color
+                draw=ImageDraw.Draw(canvas),
+                text=date_str,
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=info['rotation'],
+                font=font,
+                fill=text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -508,10 +512,15 @@ class NatalChartService:
         if 'moon-sign' in rects:
             info = rects['moon-sign']
             rotated, pos = NatalChartService._draw_rotated_text(
-                draw, moon_sign.upper(),
-                info['center_x'] - info['width']/2,
-                info['center_y'] - info['height']/2,
-                info['width'], info['height'], 0, font, text_color
+                draw=ImageDraw.Draw(canvas),
+                text=moon_sign.upper(),
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=0,
+                font=font,
+                fill=text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -519,10 +528,15 @@ class NatalChartService:
         if 'rise-sign' in rects:
             info = rects['rise-sign']
             rotated, pos = NatalChartService._draw_rotated_text(
-                draw, ascendant_sign.upper(),
-                info['center_x'] - info['width']/2,
-                info['center_y'] - info['height']/2,
-                info['width'], info['height'], 0, font, text_color
+                draw=ImageDraw.Draw(canvas),
+                text=ascendant_sign.upper(),
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=0,
+                font=font,
+                fill=text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -530,10 +544,15 @@ class NatalChartService:
         if 'sun-sign' in rects:
             info = rects['sun-sign']
             rotated, pos = NatalChartService._draw_rotated_text(
-                draw, sun_sign.upper(),
-                info['center_x'] - info['width']/2,
-                info['center_y'] - info['height']/2,
-                info['width'], info['height'], 0, font, text_color
+                draw=ImageDraw.Draw(canvas),
+                text=sun_sign.upper(),
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=0,
+                font=font,
+                fill=text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -541,7 +560,7 @@ class NatalChartService:
         if 'chart-ruler' in rects:
             info = rects['chart-ruler']
             DistributionService._draw_icon(
-                draw=draw,
+                draw=ImageDraw.Draw(canvas),
                 name=chart_ruler,
                 x=int(info['center_x'] - info['width']/2),
                 y=int(info['center_y'] - info['height']/2),
@@ -552,27 +571,30 @@ class NatalChartService:
             
         # Draw element distribution
         ElementDistributionService.draw_element_distribution(
-            draw=draw,
+            draw=ImageDraw.Draw(canvas),
             stats=stats,
             svg_paths_dir=svg_paths_dir,
             rects=rects
         )
 
- 
-        
         font = ImageFont.truetype(font_family_bold, 54)
         if 'name' in rects:
             info = rects['name']
             rotated, pos = NatalChartService._draw_rotated_text(
-                draw, user_name, 
-                info['center_x'] - info['width']/2, 
-                info['center_y'] - info['height']/2,
-                info['width'], info['height'], 0, font, text_color
+                draw=ImageDraw.Draw(canvas),
+                text=user_name, 
+                x=info['center_x'] - info['width']/2, 
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=0,
+                font=font,
+                fill=text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
             
-         # Draw location from stats basic info
+        # Draw location from stats basic info
         font = ImageFont.truetype(font_family_regular, 24)
         basic_info = stats.basic_info
         north, east = basic_info.grid[1][1].split(' ')
@@ -580,10 +602,15 @@ class NatalChartService:
         if 'north' in rects and basic_info:
             info = rects['north']
             rotated, pos = NatalChartService._draw_rotated_text(
-                draw, north,
-                info['center_x'] - info['width']/2,
-                info['center_y'] - info['height']/2,
-                info['width'], info['height'], 0, font, text_color
+                draw=ImageDraw.Draw(canvas),
+                text=north,
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=0,
+                font=font,
+                fill=text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -591,10 +618,15 @@ class NatalChartService:
         if 'east' in rects and basic_info:
             info = rects['east']
             rotated, pos = NatalChartService._draw_rotated_text(
-                draw, east,
-                info['center_x'] - info['width']/2,
-                info['center_y'] - info['height']/2,
-                info['width'], info['height'], 0, font, text_color
+                draw=ImageDraw.Draw(canvas),
+                text=east,
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=0,
+                font=font,
+                fill=text_color
             )
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
@@ -602,7 +634,7 @@ class NatalChartService:
         font = ImageFont.truetype(font_family_bold, 36)
         # Draw modality distribution
         DistributionService.draw_modality_distribution(
-            draw=draw,
+            draw=ImageDraw.Draw(canvas),
             stats=stats,
             rects=rects,
             svg_paths_dir=svg_paths_dir
@@ -610,7 +642,7 @@ class NatalChartService:
 
         # Draw polarity distribution
         DistributionService.draw_polarity_distribution(
-            draw=draw,
+            draw=ImageDraw.Draw(canvas),
             stats=stats,
             rects=rects,
             svg_paths_dir=svg_paths_dir

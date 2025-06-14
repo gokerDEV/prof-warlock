@@ -22,10 +22,10 @@ class ElementDistributionService:
     
     # Fixed rotation angles for each element
     ELEMENT_ROTATIONS = {
-        'earth': 45,
+        'earth': -45,
         'air': -45,
-        'water': -135,
-        'fire': 135
+        'water': 45,
+        'fire': 45
     }
 
     # Colors
