@@ -28,6 +28,8 @@ from .aspect_matrix_service import AspectMatrixService
 from .element_distribution_service import ElementDistributionService
 from .distribution_service import DistributionService
 from .qr_code_service import QRCodeService
+from .planet_status_service import PlanetStatusService
+from .svg_path_service import SVGPathService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -285,11 +287,11 @@ class NatalChartService:
         
         return rotated_txt, (paste_x, paste_y)
 
-    @staticmethod
-    def _draw_aspect_matrix(draw, grid, center_x, center_y, assets_path):
-        """Draw aspect matrix in the center using SVG symbols."""
-        svg_paths_dir = os.path.join(assets_path, 'svg_paths')
-        AspectMatrixService.draw_aspect_matrix(draw, grid, center_x, center_y, svg_paths_dir)
+    # @staticmethod
+    # def _draw_aspect_matrix(draw, grid, center_x, center_y, assets_path):
+    #     """Draw aspect matrix in the center using SVG symbols."""
+    #     svg_paths_dir = os.path.join(assets_path, 'svg_paths')
+    #     AspectMatrixService.draw_aspect_matrix(draw, grid, center_x, center_y, svg_paths_dir)
 
     @staticmethod
     def generate_chart(user_info: Dict[str, str], template: str = '1', background_color: str = "#ffffff", font_size: int = 48, text_color: tuple = (30, 30, 30, 255)) -> bytes:
@@ -406,8 +408,10 @@ class NatalChartService:
         # Get the aspect cross reference table
         stats = Stats(data1=mimi, data2=transit)
         cross_ref_data = stats.cross_ref
-        grid = cross_ref_data.grid
+        aspect_grid = cross_ref_data.grid
         
+        # Get celestial body data for planet statuses
+        celestial_data = stats.celestial_body
 
         
         # Create canvas
@@ -425,6 +429,9 @@ class NatalChartService:
         # chart_y = coord_y + h_latlon + 60
 
         svg_paths_dir = os.path.join(assets_path, 'svg_paths')
+        
+        # Initialize SVG service
+        SVGPathService.initialize(svg_paths_dir)
 
         # Place zodiac signs
         sign_size = 220
@@ -453,29 +460,23 @@ class NatalChartService:
         if 'chart' in rects:
             chart_size = 2250
             info = rects['chart']
-            # Create chart
-            chart = Chart(
-                data1=mimi,
-                # data2=transit,
-                width=chart_size
+            
+            # Get chart with status indicators
+            chart_image = PlanetStatusService.get_chart_with_status(
+                mimi, 
+                chart_size, 
+                svg_paths_dir,
+                chart=Chart(data1=mimi, width=chart_size),
+                stats=stats
             )
-            svg_str = chart.svg
-            chart_png = cairosvg.svg2png(bytestring=svg_str.encode("utf-8"), output_width=chart_size, output_height=chart_size)
             
-            # Create base chart image
-            chart_img = Image.open(BytesIO(chart_png)).convert("RGBA")
-            draw = ImageDraw.Draw(chart_img)
-            
-            # Convert back to PNG for further processing
-            chart_buf = BytesIO()
-            chart_img.save(chart_buf, format="PNG")
-            chart_png = chart_buf.getvalue()
-            canvas.paste(chart_img, (int(info['center_x'] - chart_size/2), int(info['center_y'] - chart_size/2)), chart_img)
+            # Place the chart on canvas
+            canvas.paste(chart_image, (int(info['center_x'] - chart_size/2), int(info['center_y'] - chart_size/2)), chart_image)
         
         if 'aspect' in rects:
             info = rects['aspect']
             # Draw the aspect matrix in the center
-            AspectMatrixService.draw_aspect_matrix(ImageDraw.Draw(canvas), grid, info['center_x'], info['center_y'], svg_paths_dir)
+            AspectMatrixService.draw_aspect_matrix(ImageDraw.Draw(canvas), aspect_grid, info['center_x'], info['center_y'], svg_paths_dir)
 
         # Draw each text element individually
         if 'birth-place' in rects:
@@ -510,6 +511,7 @@ class NatalChartService:
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
 
+ 
         font = ImageFont.truetype(font_family_bold, 28)
 
         if 'moon-sign' in rects:

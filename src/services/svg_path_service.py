@@ -33,9 +33,23 @@ class SVGPathService:
         '☌': 'conjunction', '□': 'square', '△': 'trine', '⚹': 'sextile',
         '⚺': 'quincunx', '☍': 'opposition', '⚻': 'semisextile',
         '⚼': 'sesquiquadrate', '∠': 'semisquare',
+        '℞': 'retrograde',
+        'domicile': 'domicile',
+        'detriment': 'detriment',
+        'exaltation': 'exaltation',
+        'fall': 'fall'
     }
 
+
     _svg_cache: Dict[str, str] = {}
+    _initialized = False
+
+    @classmethod
+    def initialize(cls, svg_paths_dir: str) -> None:
+        """Initialize the service by loading all SVG files."""
+        if not cls._initialized:
+            cls._load_svg_files(svg_paths_dir)
+            cls._initialized = True
 
     @classmethod
     def _load_svg_files(cls, svg_paths_dir: str) -> None:
@@ -57,11 +71,14 @@ class SVGPathService:
     @classmethod
     def render_symbol(cls, filename: str, size: int, color: str = 'black') -> Optional[Image.Image]:
         """Renders the SVG from the given filename into a PNG image of the desired size."""
+        if not cls._initialized:
+            raise RuntimeError("SVGPathService not initialized. Call initialize() first.")
+
         if filename in cls._svg_cache:
             path_content = cls._svg_cache[filename]
             
-            fill_color = color if filename == 'asc'  or filename == 'mc' else 'none'
-            stroke_width = '0' if filename == 'asc'  or filename == 'mc' else '1.5'
+            fill_color = color if filename == 'asc' or filename == 'mc' else 'none'
+            stroke_width = '0' if filename == 'asc' or filename == 'mc' else '1.5'
             
             # Create a complete SVG structure with larger viewBox
             svg_template = f'''<?xml version="1.0" encoding="UTF-8" standalone="no"?>
@@ -80,3 +97,17 @@ class SVGPathService:
                 logger.error(f"SVG -> PNG conversion error for {filename}: {e}")
                 logger.error(f"SVG content: {svg_template}")
         return None 
+
+    @classmethod
+    def get_symbol(cls, planet_name: str) -> str:
+        """Convert planet name to its symbol.
+        
+        Args:
+            planet_name: Name of the planet
+            
+        Returns:
+            str: The symbol for the planet, or empty string if not found
+        """
+        # Create reverse mapping on the fly
+        reverse_map = {v: k for k, v in cls.SYMBOL_MAP.items()}
+        return reverse_map.get(planet_name.lower(), '') 
