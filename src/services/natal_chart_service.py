@@ -294,7 +294,7 @@ class NatalChartService:
     #     AspectMatrixService.draw_aspect_matrix(draw, grid, center_x, center_y, svg_paths_dir)
 
     @staticmethod
-    def generate_chart(user_info: Dict[str, str], template: str = '1', background_color: str = "#ffffff", font_size: int = 48, text_color: tuple = (30, 30, 30, 255)) -> bytes:
+    def generate_chart(user_info: Dict[str, str], template: str = '4', background_color: str = "#ffffff", font_size: int = 48, text_color: tuple = (30, 30, 30, 255)) -> bytes:
         """Generate a natal chart PNG, corrected to pass tests and accept flexible date formats."""
         date_str = user_info["Date of Birth"]
         if not date_str or date_str == "invalid-date":
