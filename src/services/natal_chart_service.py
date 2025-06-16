@@ -342,19 +342,32 @@ class NatalChartService:
         font_dir = assets_path / 'fonts'
         font_family_bold = str(font_dir / 'static' / 'Montserrat-Bold.ttf')
         font_family_regular = str(font_dir / 'static' / 'Montserrat-Regular.ttf')
-        # font_family_bold = str(font_dir / 'Pompiere' / 'Pompiere-Regular.ttf')
-        # font_family_regular = str(font_dir / 'Pompiere' / 'Pompiere-Regular.ttf')
         font = ImageFont.truetype(font_family_bold, 48)
-        
-        
-        
 
-        # Get zodiac sign images
-        sun_sign_path = os.path.join(os.path.dirname(__file__), '../../assets/zodiac', f"{sun_sign.lower()}.svg")
-        moon_sign_path = os.path.join(os.path.dirname(__file__), '../../assets/zodiac', f"{moon_sign.lower()}.svg")
+        # Read the signs SVG template
+        signs_svg_path = assets_path / 'zodiac' / 'signs.svg'
+        with open(signs_svg_path, 'r') as f:
+            signs_svg_content = f.read()
 
-        sun_svg = cairosvg.svg2png(url=str(sun_sign_path), output_width=200, output_height=200)
-        moon_svg = cairosvg.svg2png(url=str(moon_sign_path), output_width=200, output_height=200)
+        # Create sun sign SVG by hiding other signs and making current sign white
+        sun_svg_content = signs_svg_content
+        for sign in ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces']:
+            if sign != sun_sign.lower():
+                sun_svg_content = sun_svg_content.replace(f'<g id="{sign}">', f'<g id="{sign}" style="display:none">')
+            else:
+                sun_svg_content = sun_svg_content.replace(f'<g id="{sign}">', f'<g id="{sign}" fill="#ffffff">')
+
+        # Create moon sign SVG similarly
+        moon_svg_content = signs_svg_content
+        for sign in ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces']:
+            if sign != moon_sign.lower():
+                moon_svg_content = moon_svg_content.replace(f'<g id="{sign}">', f'<g id="{sign}" style="display:none">')
+            else:
+                moon_svg_content = moon_svg_content.replace(f'<g id="{sign}">', f'<g id="{sign}" fill="#ffffff">')
+
+        # Convert SVGs to PNG
+        sun_svg = cairosvg.svg2png(bytestring=sun_svg_content.encode('utf-8'), output_width=200, output_height=200)
+        moon_svg = cairosvg.svg2png(bytestring=moon_svg_content.encode('utf-8'), output_width=200, output_height=200)
         
         sun_img = Image.open(BytesIO(sun_svg)).convert("RGBA")
         moon_img = Image.open(BytesIO(moon_svg)).convert("RGBA")
@@ -433,14 +446,7 @@ class NatalChartService:
         # Initialize SVG service
         SVGPathService.initialize(svg_paths_dir)
 
-        # Place zodiac signs
-        sign_size = 220
-        sun_sign_img = sun_img.resize((sign_size, sign_size), Image.LANCZOS)
-        moon_sign_img = moon_img.resize((sign_size, sign_size), Image.LANCZOS)
-        
-        canvas.paste(sun_sign_img, (1825, 2560), sun_sign_img)
-        canvas.paste(moon_sign_img, (430, 2550), moon_sign_img)
-
+      
         # Get placeholder rectangles
         rects = NatalChartService.get_placeholder_rects(svg_content, 
                                                         [
@@ -452,7 +458,8 @@ class NatalChartService:
                                                         'name',
                                                         'north','east',
                                                         'cardinal', 'fixed', 'mutable',
-                                                        'qr-code'
+                                                        'qr-code',
+                                                        'sun-icon', 'moon-icon'  # Add new placeholders for icons
                                                         ])
         draw = ImageDraw.Draw(canvas)
         
@@ -512,7 +519,7 @@ class NatalChartService:
                 canvas.paste(rotated, pos, rotated)
 
  
-        font = ImageFont.truetype(font_family_bold, 28)
+        font = ImageFont.truetype(font_family_bold, 36)
 
         if 'moon-sign' in rects:
             info = rects['moon-sign']
@@ -562,6 +569,24 @@ class NatalChartService:
             if rotated is not None:
                 canvas.paste(rotated, pos, rotated)
                 
+          # Place zodiac signs in placeholders
+        if 'sun-icon' in rects:
+            info = rects['sun-icon']
+            sun_sign_img = sun_img.resize((int(info['width']), int(info['height'])), Image.LANCZOS)
+            canvas.paste(sun_sign_img, 
+                        (int(info['center_x'] - info['width']/2), 
+                         int(info['center_y'] - info['height']/2)), 
+                        sun_sign_img)
+            
+        if 'moon-icon' in rects:
+            info = rects['moon-icon']
+            moon_sign_img = moon_img.resize((int(info['width']), int(info['height'])), Image.LANCZOS)
+            canvas.paste(moon_sign_img, 
+                        (int(info['center_x'] - info['width']/2), 
+                         int(info['center_y'] - info['height']/2)), 
+                        moon_sign_img)
+
+                
         if 'chart-ruler' in rects:
             info = rects['chart-ruler']
             DistributionService._draw_icon(
@@ -571,7 +596,8 @@ class NatalChartService:
                 y=int(info['center_y'] - info['height']/2),
                 width=info['width'],
                 height=info['height'],
-                svg_paths_dir=svg_paths_dir
+                svg_paths_dir=svg_paths_dir,
+                size=72
             )
             
         # Draw element distribution
@@ -600,7 +626,7 @@ class NatalChartService:
                 canvas.paste(rotated, pos, rotated)
             
         # Draw location from stats basic info
-        font = ImageFont.truetype(font_family_regular, 24)
+        font = ImageFont.truetype(font_family_regular, 32)
         basic_info = stats.basic_info
         north, east = basic_info.grid[1][1].split(' ')
         
@@ -608,7 +634,7 @@ class NatalChartService:
             info = rects['north']
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw=ImageDraw.Draw(canvas),
-                text=north,
+                text=north.replace(',', ''),
                 x=info['center_x'] - info['width']/2,
                 y=info['center_y'] - info['height']/2,
                 width=info['width'],

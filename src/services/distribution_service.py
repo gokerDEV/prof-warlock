@@ -32,15 +32,12 @@ class DistributionService:
     ICON_SIZE = 60  # Larger size for chart ruler icon
     
     @staticmethod
-    def _draw_icon(draw: ImageDraw, name: str, x: int, y: int, width: int, height: int, svg_paths_dir: str) -> None:
+    def _draw_icon(draw: ImageDraw, name: str, x: int, y: int, width: int, height: int, svg_paths_dir: str, size: int = 60, color: str = "#000000") -> None:
         """Draw a single SVG icon centered in the given area."""
         # Load SVG files
         SVGPathService._load_svg_files(svg_paths_dir)
-        
-        print('NAME', name)
-    
         # Render the symbol
-        if sym_img := SVGPathService.render_symbol(name, size=DistributionService.ICON_SIZE, color=DistributionService.TEXT_COLOR):
+        if sym_img := SVGPathService.render_symbol(name, size=size, color=color):
             # Calculate center position
             paste_x = int(x + (width - sym_img.width) // 2)
             paste_y = int(y + (height - sym_img.height) // 2)

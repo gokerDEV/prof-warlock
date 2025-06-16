@@ -21,7 +21,7 @@ def main():
     parser.add_argument('--location', required=True, help='Birth location')
     parser.add_argument('--latitude', type=float, help='Latitude (optional if location is provided)')
     parser.add_argument('--longitude', type=float, help='Longitude (optional if location is provided)')
-    parser.add_argument('--template', default='default', choices=['1', '2' ,'3'], help='Chart theme')
+    parser.add_argument('--template', default='default', choices=['1', '2' ,'3', '4'], help='Chart theme')
     parser.add_argument('--output', default='natal_chart.png', help='Output file path')
     
     args = parser.parse_args()
