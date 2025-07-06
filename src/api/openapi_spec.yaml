@@ -1,13 +1,98 @@
 openapi: 3.1.0
 info:
   title: Prof. Warlock API
-  description: API for generating natal charts and stats
+  description: API for generating natal charts and stats with MongoDB storage
   version: 1.0.0
 paths:
+  /:
+    get:
+      summary: Health check endpoint
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  status:
+                    type: string
+                  version:
+                    type: string
+
+  /health:
+    get:
+      summary: Detailed health check with system information
+      operationId: detailedHealthCheck
+      responses:
+        '200':
+          description: Detailed health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  service:
+                    type: string
+                  version:
+                    type: string
+                  features:
+                    type: array
+                    items:
+                      type: string
+                  database:
+                    type: object
+                    properties:
+                      mongodb:
+                        type: string
+
+  /webhook:
+    post:
+      summary: Process incoming email webhooks from Postmark
+      operationId: processEmailWebhook
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Webhook authentication token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Postmark webhook data
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '202':
+          description: Webhook accepted (partial success)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '401':
+          description: Unauthorized - Invalid webhook token
+        '500':
+          description: Internal server error
+
   /natal-chart:
     post:
       summary: Generate a natal chart and upload to S3
       operationId: generateNatalChart
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -39,8 +124,10 @@ paths:
 
   /natal-chart-image:
     post:
-      summary: Generate a natal chart and return image directly
+      summary: Generate a natal chart image and save to MongoDB with S3
       operationId: generateNatalChartImage
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -50,6 +137,19 @@ paths:
       responses:
         '200':
           description: Natal chart image generated successfully
+          headers:
+            X-Mongo-ID:
+              description: MongoDB document ID
+              schema:
+                type: string
+            X-S3-URL:
+              description: S3 URL for the chart image
+              schema:
+                type: string
+            X-QR-URL:
+              description: QR code URL
+              schema:
+                type: string
           content:
             image/png:
               schema:
@@ -60,10 +160,55 @@ paths:
         '500':
           description: Internal server error
 
+  /natal-chart/{mongo_id}:
+    get:
+      summary: Retrieve natal chart data by MongoDB ID
+      operationId: getNatalChartById
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: mongo_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MongoDB document ID
+        - name: birth_date
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{2}-\d{2}-\d{4}$'
+          description: Birth date in DD-MM-YYYY format
+        - name: birth_time
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{2}:\d{2}$'
+          description: Birth time in HH:MM format
+      responses:
+        '200':
+          description: Natal chart data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NatalChartResponse'
+        '400':
+          description: Invalid MongoDB ID format or birth date format
+        '401':
+          description: Unauthorized
+        '404':
+          description: Natal chart not found or birth information doesn't match
+        '500':
+          description: Internal server error
+
   /natal-stats:
     post:
-      summary: Get natal stats
+      summary: Get natal stats including sun sign, moon sign, rising sign and transit information
       operationId: getNatalStats
+      security:
+        - ApiKeyAuth: []
       requestBody:
         required: true
         content:
@@ -96,31 +241,74 @@ paths:
         '500':
           description: Internal server error
 
+  /privacy:
+    get:
+      summary: Privacy policy endpoint
+      operationId: getPrivacyPolicy
+      responses:
+        '200':
+          description: Privacy policy information
+          content:
+            text/plain:
+              schema:
+                type: string
+
 components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: API Key for authentication
+
   schemas:
     NatalChartRequest:
       type: object
       properties:
         first_name:
           type: string
+          description: First name of the person
         last_name:
           type: string
+          description: Last name of the person
         birth_day:
           type: integer
+          minimum: 1
+          maximum: 31
+          description: Birth day (1-31)
         birth_month:
           type: integer
+          minimum: 1
+          maximum: 12
+          description: Birth month (1-12)
         birth_year:
           type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Birth year
         birth_time:
           type: string
           format: time
           pattern: '^\d{2}:\d{2}$'
+          description: Birth time in HH:MM format
         birth_place:
           type: string
+          description: Birth place (city, country)
         latitude:
           type: number
+          minimum: -90
+          maximum: 90
+          description: Latitude coordinate
         longitude:
           type: number
+          minimum: -180
+          maximum: 180
+          description: Longitude coordinate
+        lang:
+          type: string
+          enum: [en, tr]
+          default: en
+          description: Language code for the natal chart (en=English, tr=Turkish)
       required:
         - first_name
         - last_name
@@ -134,32 +322,153 @@ components:
       properties:
         birth_day:
           type: integer
+          minimum: 1
+          maximum: 31
+          description: Birth day (1-31)
         birth_month:
           type: integer
+          minimum: 1
+          maximum: 12
+          description: Birth month (1-12)
         birth_year:
           type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Birth year
         birth_time:
           type: string
           format: time
           pattern: '^\d{2}:\d{2}$'
+          description: Birth time in HH:MM format
         birth_place:
           type: string
+          description: Birth place (city, country)
         latitude:
           type: number
+          minimum: -90
+          maximum: 90
+          description: Latitude coordinate
         longitude:
           type: number
+          minimum: -180
+          maximum: 180
+          description: Longitude coordinate
         today_day:
           type: integer
+          minimum: 1
+          maximum: 31
+          description: Today's day (1-31), optional
         today_month:
           type: integer
+          minimum: 1
+          maximum: 12
+          description: Today's month (1-12), optional
         today_year:
           type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Today's year, optional
         today_time:
           type: string
           format: time
           pattern: '^\d{2}:\d{2}$'
+          description: Today's time in HH:MM format, optional
       required:
         - birth_day
         - birth_month
         - birth_year
-        - birth_time 
+        - birth_time
+
+    WebhookResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, partial_success, error]
+          description: Processing status
+        message:
+          type: string
+          description: Response message
+        details:
+          type: object
+          description: Additional details
+
+    NatalChartResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          description: Response status
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              description: MongoDB document ID
+                         user_info:
+               type: object
+               properties:
+                 first_name:
+                   type: string
+                 last_name:
+                   type: string
+                 birth_day:
+                   type: integer
+                 birth_month:
+                   type: integer
+                 birth_year:
+                   type: integer
+                 birth_time:
+                   type: string
+                 birth_place:
+                   type: string
+                 latitude:
+                   type: number
+                 longitude:
+                   type: number
+                 lang:
+                   type: string
+                   description: Language code (en=English, tr=Turkish)
+            chart_info:
+              type: object
+              properties:
+                s3_url:
+                  type: string
+                  description: S3 URL for the chart image
+                qr_url:
+                  type: string
+                  description: QR code URL
+                file_size:
+                  type: integer
+                  description: File size in bytes
+                status:
+                  type: string
+                  enum: [generating, completed, failed]
+                  description: Chart generation status
+            stats:
+              type: object
+              properties:
+                full_report:
+                  type: string
+                  description: Full natal chart report in markdown
+                sun_sign:
+                  type: string
+                  description: Sun sign
+                moon_sign:
+                  type: string
+                  description: Moon sign
+                rising_sign:
+                  type: string
+                  description: Rising/Ascendant sign
+            metadata:
+              type: object
+              properties:
+                created_at:
+                  type: string
+                  format: date-time
+                  description: Creation timestamp
+                updated_at:
+                  type: string
+                  format: date-time
+                  description: Last update timestamp 

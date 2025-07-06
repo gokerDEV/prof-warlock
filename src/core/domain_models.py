@@ -90,6 +90,7 @@ class NatalChartRequest(BaseModel):
     birth_place: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    lang: Optional[str] = "en"  # Language code: en, tr
 
     class Config:
         """Pydantic model configuration."""
@@ -103,7 +104,8 @@ class NatalChartRequest(BaseModel):
                 "birth_time": "12:00",
                 "birth_place": "New York",
                 "latitude": 40.7128,
-                "longitude": -74.0060
+                "longitude": -74.0060,
+                "lang": "en"
             }
         }
 

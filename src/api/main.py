@@ -278,6 +278,7 @@ async def generate_natal_chart_image(
             "birth_place": request.birth_place,
             "latitude": request.latitude,
             "longitude": request.longitude,
+            "lang": request.lang or "en",
             "created_at": datetime.now(),
             "status": "generating"
         }
@@ -296,8 +297,11 @@ async def generate_natal_chart_image(
             "Longitude": request.longitude
         }
 
-        # Generate QR code URL with MongoDB ID
-        qr_url = f"https://goker.art/natal/{mongo_id}"
+        # Generate QR code URL with MongoDB ID and language parameter
+        if request.lang and request.lang != "en":
+            qr_url = f"https://goker.art/natal/{mongo_id}?lang={request.lang}"
+        else:
+            qr_url = f"https://goker.art/natal/{mongo_id}"
 
         # Generate natal chart with QR code
         chart_data_bytes = natal_chart_service.generate_chart(user_info, qr_url=qr_url)
@@ -459,7 +463,8 @@ async def get_natal_chart_by_id(
                 "birth_time": document.get("birth_time"),
                 "birth_place": document.get("birth_place"),
                 "latitude": document.get("latitude"),
-                "longitude": document.get("longitude")
+                "longitude": document.get("longitude"),
+                "lang": document.get("lang", "en")
             },
             "chart_info": {
                 "s3_url": document.get("s3_url"),
