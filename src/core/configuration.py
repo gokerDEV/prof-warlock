@@ -35,6 +35,21 @@ class S3Config:
     ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
     SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 
+class MongoDBConfig:
+    """MongoDB settings."""
+    MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+    MONGO_DB = os.getenv("MONGO_DB", "profwarlock")
+    
+    @property
+    def uri(self) -> str:
+        """Get MongoDB connection URI."""
+        return self.MONGO_URI
+    
+    @property
+    def DATABASE(self) -> str:
+        """Get MongoDB database name."""
+        return self.MONGO_DB
+
 class AppConfig:
     """Main application configuration."""
     def __init__(self):
@@ -42,6 +57,7 @@ class AppConfig:
         self.email = EmailConfig()
         self.security = SecurityConfig()
         self.s3 = S3Config()
+        self.mongodb = MongoDBConfig()
         self.environment = os.getenv("ENVIRONMENT", "development")
         self.save_inbound_emails = os.getenv("SAVE_INBOUND_EMAILS", "true").lower() == "true"
         self._validate_required_settings()

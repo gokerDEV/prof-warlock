@@ -43,4 +43,8 @@ torch>=2.6.0
 # AWS S3 integration
 boto3==1.28.0
 
+# MongoDB integration
+pymongo==4.6.0
+motor==3.3.2
+
 qrcode==7.4.2

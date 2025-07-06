@@ -14,6 +14,8 @@ from PIL import Image
 import io
 import boto3
 from hashlib import sha256
+from motor.motor_asyncio import AsyncIOMotorClient
+from bson import ObjectId
 
 from .. import __version__
 
@@ -49,6 +51,11 @@ s3_client = boto3.client(
     aws_access_key_id=config.s3.ACCESS_KEY_ID,
     aws_secret_access_key=config.s3.SECRET_ACCESS_KEY
 )
+
+# Initialize MongoDB client
+mongodb_client = AsyncIOMotorClient(config.mongodb.uri)
+mongodb_db = mongodb_client[config.mongodb.DATABASE]
+natal_collection = mongodb_db.natal
 
 
 def verify_webhook_token(token: Optional[str] = Query(None)) -> str:
@@ -106,6 +113,14 @@ async def health_check():
 @app.get("/health")
 async def detailed_health_check():
     """Detailed health check with system information."""
+    try:
+        # Test MongoDB connection
+        await mongodb_client.admin.command('ismaster')
+        mongodb_status = "connected"
+    except Exception as e:
+        logger.error(f"MongoDB connection error: {str(e)}")
+        mongodb_status = "disconnected"
+    
     return {
         "status": "healthy",
         "service": "Prof. Warlock",
@@ -113,8 +128,12 @@ async def detailed_health_check():
         "features": [
             "email_parsing",
             "image_processing",
-            "personalized_responses"
-        ]
+            "personalized_responses",
+            "mongodb_storage"
+        ],
+        "database": {
+            "mongodb": mongodb_status
+        }
     }
 
 
@@ -238,6 +257,7 @@ async def generate_natal_chart_image(
 ) -> Response:
     """
     Generate a natal chart image and return it directly.
+    Also saves the chart to MongoDB with S3 URL and natal stats.
     
     Args:
         request: Birth information for natal chart generation
@@ -247,6 +267,26 @@ async def generate_natal_chart_image(
         Response: Generated natal chart image as PNG
     """
     try:
+        # First, create a document in MongoDB to get the ID
+        temp_document = {
+            "first_name": request.first_name,
+            "last_name": request.last_name,
+            "birth_day": request.birth_day,
+            "birth_month": request.birth_month,
+            "birth_year": request.birth_year,
+            "birth_time": request.birth_time,
+            "birth_place": request.birth_place,
+            "latitude": request.latitude,
+            "longitude": request.longitude,
+            "created_at": datetime.now(),
+            "status": "generating"
+        }
+        
+        result = await natal_collection.insert_one(temp_document)
+        mongo_id = str(result.inserted_id)
+        
+        logger.info(f"💾 Created temporary MongoDB document with ID: {mongo_id}")
+
         user_info = {
             "First Name": request.first_name,
             "Last Name": request.last_name,
@@ -256,8 +296,11 @@ async def generate_natal_chart_image(
             "Longitude": request.longitude
         }
 
-        # Generate natal chart
-        chart_data_bytes = natal_chart_service.generate_chart(user_info)
+        # Generate QR code URL with MongoDB ID
+        qr_url = f"https://goker.art/natal/{mongo_id}"
+
+        # Generate natal chart with QR code
+        chart_data_bytes = natal_chart_service.generate_chart(user_info, qr_url=qr_url)
 
         # Resize image
         image = Image.open(io.BytesIO(chart_data_bytes))
@@ -269,20 +312,182 @@ async def generate_natal_chart_image(
         image.save(output, format='PNG')
         resized_chart_data_bytes = output.getvalue()
 
+        # Upload to S3
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        hash_digest = sha256(resized_chart_data_bytes).hexdigest()[:8]
+        s3_filename = f"natal_charts/{timestamp}_{hash_digest}.png"
+
+        s3_client.put_object(
+            Bucket=config.s3.BUCKET,
+            Key=s3_filename,
+            Body=resized_chart_data_bytes,
+            ContentType='image/png'
+        )
+
+        # Generate S3 URL
+        s3_url = f"{config.s3.PUBLIC_URL}{s3_filename}"
+
+        # Get natal stats
+        stats_data = await natal_chart_service.get_natal_stats(
+            birth_datetime=f"{request.birth_day:02d}-{request.birth_month:02d}-{request.birth_year} {request.birth_time}",
+            birth_place=request.birth_place,
+            latitude=request.latitude,
+            longitude=request.longitude,
+            today_date=datetime.now().strftime("%d-%m-%Y"),
+            today_time=datetime.now().strftime("%H:%M")
+        )
+
+        # Update MongoDB document with complete information
+        update_document = {
+            "s3_url": s3_url,
+            "s3_filename": s3_filename,
+            "qr_url": qr_url,
+            "file_size": len(resized_chart_data_bytes),
+            "stats": stats_data,
+            "status": "completed",
+            "updated_at": datetime.now()
+        }
+        
+        await natal_collection.update_one(
+            {"_id": ObjectId(mongo_id)},
+            {"$set": update_document}
+        )
+        
+        logger.info(f"💾 Updated MongoDB document with S3 URL and stats: {mongo_id}")
+
         # Return the image directly
         return Response(
             content=resized_chart_data_bytes,
             media_type="image/png",
             headers={
-                "Content-Disposition": f'attachment; filename="natal_chart_{request.first_name}_{request.last_name}.png"'
+                "Content-Disposition": f'attachment; filename="natal_chart_{request.first_name}_{request.last_name}.png"',
+                "X-Mongo-ID": mongo_id,
+                "X-S3-URL": s3_url,
+                "X-QR-URL": qr_url
             }
         )
     except Exception as e:
         logger.error(f"💥 Error generating natal chart image: {str(e)}")
+        # If we have a mongo_id, mark the document as failed
+        if 'mongo_id' in locals():
+            try:
+                await natal_collection.update_one(
+                    {"_id": ObjectId(mongo_id)},
+                    {"$set": {"status": "failed", "error": str(e), "updated_at": datetime.now()}}
+                )
+            except:
+                pass
         raise HTTPException(
             status_code=500,
             detail="Failed to generate natal chart image"
         )
+
+
+@app.get("/natal-chart/{mongo_id}")
+async def get_natal_chart_by_id(
+    mongo_id: str,
+    birth_date: str = Query(..., description="Birth date in format DD-MM-YYYY"),
+    birth_time: str = Query(..., description="Birth time in format HH:MM"),
+    api_key: str = Depends(verify_api_key)
+) -> JSONResponse:
+    """
+    Retrieve natal chart data by MongoDB ID and birth information.
+    
+    Args:
+        mongo_id: MongoDB document ID
+        birth_date: Birth date in DD-MM-YYYY format
+        birth_time: Birth time in HH:MM format
+        api_key: API key for authentication
+        
+    Returns:
+        JSONResponse: Natal chart data including S3 URL and stats
+    """
+    try:
+        # Validate MongoDB ID format
+        if not ObjectId.is_valid(mongo_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid MongoDB ID format"
+            )
+        
+        # Parse birth date
+        try:
+            birth_day, birth_month, birth_year = birth_date.split('-')
+            birth_day = int(birth_day)
+            birth_month = int(birth_month)
+            birth_year = int(birth_year)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid birth date format. Use DD-MM-YYYY"
+            )
+        
+        # Query MongoDB with ID and birth information for security
+        query = {
+            "_id": ObjectId(mongo_id),
+            "birth_day": birth_day,
+            "birth_month": birth_month,
+            "birth_year": birth_year,
+            "birth_time": birth_time
+        }
+        
+        document = await natal_collection.find_one(query)
+        
+        if not document:
+            raise HTTPException(
+                status_code=404,
+                detail="Natal chart not found or birth information doesn't match"
+            )
+        
+        # Convert ObjectId to string for JSON serialization
+        document["_id"] = str(document["_id"])
+        
+        # Convert datetime fields to string if they exist
+        for date_field in ["created_at", "updated_at"]:
+            if date_field in document and document[date_field]:
+                document[date_field] = document[date_field].isoformat()
+        
+        # Create response with organized data
+        response_data = {
+            "id": document["_id"],
+            "user_info": {
+                "first_name": document.get("first_name"),
+                "last_name": document.get("last_name"),
+                "birth_day": document.get("birth_day"),
+                "birth_month": document.get("birth_month"),
+                "birth_year": document.get("birth_year"),
+                "birth_time": document.get("birth_time"),
+                "birth_place": document.get("birth_place"),
+                "latitude": document.get("latitude"),
+                "longitude": document.get("longitude")
+            },
+            "chart_info": {
+                "s3_url": document.get("s3_url"),
+                "qr_url": document.get("qr_url"),
+                "file_size": document.get("file_size"),
+                "status": document.get("status", "unknown")
+            },
+            "stats": document.get("stats"),
+            "metadata": {
+                "created_at": document.get("created_at"),
+                "updated_at": document.get("updated_at")
+            }
+        }
+        
+        return JSONResponse(content={
+            "status": "success",
+            "data": response_data
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Error retrieving natal chart: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve natal chart"
+        )
+
 
 
 @app.post("/natal-stats")
