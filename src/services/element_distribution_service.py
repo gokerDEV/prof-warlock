@@ -34,33 +34,48 @@ class ElementDistributionService:
     @staticmethod
     def _draw_symbol_grid(draw: ImageDraw, bodies: List[str], rect: Dict, rotation: float) -> None:
         """Draw symbols in a grid with the specified rotation."""
-        # Create a temporary canvas for this category's grid
-        grid_width = rect['width']
-        grid_height = rect['height']
+        # Fixed dimensions and padding
+        PADDING = 40
+        BASE_SYMBOL_SIZE = 60
+        LARGE_SYMBOL_SIZE = 72
+        GRID_COLS = 4
+        MAX_SYMBOLS = 16
         
-        # Create canvas and calculate positions
-        grid_canvas = DistributionUtils.create_grid_canvas(grid_width, grid_height)
-        positions = DistributionUtils.calculate_grid_positions(grid_width, grid_height)
+        # Calculate number of rows needed
+        num_bodies = min(len(bodies), MAX_SYMBOLS)
+        num_rows = (num_bodies + GRID_COLS - 1) // GRID_COLS
+        
+        # Set symbol size based on number of rows
+        symbol_size = LARGE_SYMBOL_SIZE if num_rows < 4 else BASE_SYMBOL_SIZE
+        
+        # Calculate grid dimensions
+        row_height = symbol_size
+        total_width = (GRID_COLS * symbol_size) + PADDING
+        total_height = (num_rows * row_height) + PADDING
+        
+        # Create canvas with padding
+        grid_canvas = DistributionUtils.create_grid_canvas(total_width, total_height)
         
         # Draw each body's symbol in the grid
-        for i, body in enumerate(bodies[:9]):  # Limit to 9 symbols (3x3 grid)
+        for i, body in enumerate(bodies[:MAX_SYMBOLS]):
             if body not in DistributionUtils.BODY_TO_SYMBOL:
                 continue
                 
             symbol = DistributionUtils.BODY_TO_SYMBOL[body]
-            x, y, cell_width, _ = positions[i]
             
-            if sym_img := DistributionUtils.draw_symbol(symbol, size=int(cell_width * 1), color=ElementDistributionService.SYMBOL_COLOR):
+            # Calculate position with padding
+            row = i // GRID_COLS
+            col = i % GRID_COLS
+            x = PADDING + col * symbol_size
+            y = PADDING + row * row_height
+            
+            if sym_img := DistributionUtils.draw_symbol(symbol, size=symbol_size, color=ElementDistributionService.SYMBOL_COLOR):
                 DistributionUtils.paste_centered(grid_canvas, sym_img, x, y)
         
-        # Rotate the entire grid
+        # Rotate and center the grid
         rotated_grid = grid_canvas.rotate(rotation, expand=True, resample=Image.BICUBIC)
-        
-        # Calculate paste position to center the rotated grid
         paste_x = int(rect['center_x'] - rotated_grid.width / 2)
         paste_y = int(rect['center_y'] - rotated_grid.height / 2)
-        
-        # Paste the rotated grid onto the main canvas
         draw._image.paste(rotated_grid, (paste_x, paste_y), rotated_grid)
 
     @staticmethod

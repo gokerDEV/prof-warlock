@@ -201,17 +201,30 @@ class NatalChartService:
     @staticmethod
     def _flexible_parse_date(date_str: str) -> str:
         """
-        Try to parse a date string in any reasonable format and return as 'DD-MM-YYYY HH:MM'.
-        Raise ValueError if parsing fails.
-        """
-        if not date_str or date_str == "invalid-date":
-            raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
+        Parse date string flexibly and return in DD-MM-YYYY HH:MM format.
+        
+        Args:
+            date_str: Date string in various formats
             
+        Returns:
+            str: Date string in DD-MM-YYYY HH:MM format
+        """
         try:
-            dt = date_parser.parse(date_str, dayfirst=True, fuzzy=True)
+            # If already in correct format, return as is
+            try:
+                datetime.strptime(date_str, "%d-%m-%Y %H:%M")
+                return date_str
+            except ValueError:
+                pass
+            
+            # Try parsing with dateutil parser
+            dt = date_parser.parse(date_str)
+            
+            # Convert to desired format
             return dt.strftime("%d-%m-%Y %H:%M")
-        except Exception:
-            raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
+        except Exception as e:
+            logger.error(f"Failed to parse date {date_str}: {str(e)}")
+            raise ValueError(f"Could not parse date {date_str}. Expected format: DD-MM-YYYY HH:MM")
 
     @staticmethod
     def _draw_rotated_text(draw: ImageDraw.ImageDraw, text: str, x: float, y: float, width: float, height: float, 
@@ -307,7 +320,9 @@ class NatalChartService:
             date_str = NatalChartService._flexible_parse_date(date_str)
             dt = datetime.strptime(date_str, "%d-%m-%Y %H:%M")
             dt_str = dt.strftime("%Y-%m-%d %H:%M")
-        except Exception:
+            logger.debug(f"Parsed date {date_str} to {dt_str}")
+        except Exception as e:
+            logger.error(f"Failed to parse date {date_str}: {str(e)}")
             raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
 
         # Lat, Long first if it is exists
@@ -812,68 +827,73 @@ class NatalChartService:
         Returns:
             Dict: Natal stats and transit information
         """
-        # Parse birth date and time
-        birth_dt = date_parser.parse(birth_datetime, dayfirst=True)
+        try:
+            # Parse birth date and time
+            birth_dt = datetime.strptime(birth_datetime, "%d-%m-%Y %H:%M")
 
-        # Parse today's date and time
-        today_dt = date_parser.parse(f"{today_date} {today_time}", dayfirst=True)
+            # Parse today's date and time
+            today_dt = datetime.strptime(f"{today_date} {today_time}", "%d-%m-%Y %H:%M")
 
-        # Use provided latitude and longitude if available
-        if latitude is not None and longitude is not None:
-            lat, lon = latitude, longitude
-        else:
-            # Geocode birth place
-            geolocator = Nominatim(user_agent="prof-warlock")
-            location = geolocator.geocode(birth_place)
-            if not location:
-                raise ValueError(f"Could not geocode location: {birth_place}")
-            lat, lon = location.latitude, location.longitude
+            # Use provided latitude and longitude if available
+            if latitude is not None and longitude is not None:
+                lat, lon = latitude, longitude
+            else:
+                # Geocode birth place
+                geolocator = Nominatim(user_agent="prof-warlock")
+                location = geolocator.geocode(birth_place)
+                if not location:
+                    raise ValueError(f"Could not geocode location: {birth_place}")
+                lat, lon = location.latitude, location.longitude
 
-        # Initialize Zodiac service
-        zodiac = Zodiac(
-            year=birth_dt.year,
-            month=birth_dt.month,
-            day=birth_dt.day,
-            hour=birth_dt.hour,
-            minute=birth_dt.minute,
-            latitude=lat,
-            longitude=lon
-        )
+            # Initialize Zodiac service
+            zodiac = Zodiac(
+                year=birth_dt.year,
+                month=birth_dt.month,
+                day=birth_dt.day,
+                hour=birth_dt.hour,
+                minute=birth_dt.minute,
+                latitude=lat,
+                longitude=lon
+            )
 
-        # Get zodiac signs
-        sun_sign = zodiac.get_sun_sign()
-        moon_sign = zodiac.get_lunar_sign()
-        ascendant_sign = zodiac.get_ascendant_sign()
+            # Get zodiac signs
+            sun_sign = zodiac.get_sun_sign()
+            moon_sign = zodiac.get_lunar_sign()
+            ascendant_sign = zodiac.get_ascendant_sign()
 
-        # Create natal data
-        natal_data = Data(
-            name="Natal",
-            lat=lat,
-            lon=lon,
-            utc_dt=birth_dt.strftime("%Y-%m-%d %H:%M"),
-            config=Config()
-        )
+            # Create natal data
+            natal_data = Data(
+                name="Natal",
+                lat=lat,
+                lon=lon,
+                utc_dt=birth_dt.strftime("%Y-%m-%d %H:%M"),
+                config=Config()
+            )
 
-        # Create transit data for today's date
-        transit_data = Data(
-            name="Transit",
-            lat=lat,
-            lon=lon,
-            utc_dt=today_dt.strftime("%Y-%m-%d %H:%M"),
-            config=Config()
-        )
+            # Create transit data for today's date
+            transit_data = Data(
+                name="Transit",
+                lat=lat,
+                lon=lon,
+                utc_dt=today_dt.strftime("%Y-%m-%d %H:%M"),
+                config=Config()
+            )
 
-        # Calculate stats
-        stats = Stats(data1=natal_data, data2=transit_data)
+            # Calculate stats
+            stats = Stats(data1=natal_data, data2=transit_data)
 
-        # Generate full report in markdown
-        full_report_markdown = stats.full_report(kind="markdown")
+            # Generate full report in markdown
+            full_report_markdown = stats.full_report(kind="markdown")
 
-        # Return the full report and essential stats
-        return {
-            "full_report": full_report_markdown,
-            "sun_sign": sun_sign,
-            "moon_sign": moon_sign,
-            "rising_sign": ascendant_sign
-        }
+            # Return the full report and essential stats
+            return {
+                "full_report": full_report_markdown,
+                "sun_sign": sun_sign,
+                "moon_sign": moon_sign,
+                "rising_sign": ascendant_sign
+            }
+        except ValueError as e:
+            raise ValueError(f"Date format error: {str(e)}. Expected format: DD-MM-YYYY HH:MM")
+        except Exception as e:
+            raise Exception(f"Failed to calculate natal stats: {str(e)}")
         

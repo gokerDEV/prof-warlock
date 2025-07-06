@@ -6,45 +6,17 @@ info:
 paths:
   /natal-chart:
     post:
-      summary: Generate a natal chart
+      summary: Generate a natal chart and upload to S3
       operationId: generateNatalChart
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                first_name:
-                  type: string
-                last_name:
-                  type: string
-                birth_day:
-                  type: integer
-                birth_month:
-                  type: integer
-                birth_year:
-                  type: integer
-                birth_time:
-                  type: string
-                  format: time
-                  pattern: '^\d{2}:\d{2}$'
-                birth_place:
-                  type: string
-                latitude:
-                  type: number
-                longitude:
-                  type: number
-              required:
-                - first_name
-                - last_name
-                - birth_day
-                - birth_month
-                - birth_year
-                - birth_time
+              $ref: '#/components/schemas/NatalChartRequest'
       responses:
         '200':
-          description: Natal chart generated successfully
+          description: Natal chart generated and uploaded successfully
           content:
             application/json:
               schema:
@@ -54,16 +26,35 @@ paths:
                   properties:
                     name:
                       type: string
-                      example: "natal_chart.png"
                     id:
                       type: string
-                      example: "natal_charts/20231108123456_abcdef12.png"
                     mime_type:
                       type: string
-                      example: "image/png"
                     download_link:
                       type: string
-                      example: "https://kodkafa.s3.eu-central-1.amazonaws.com/natal_charts/20231108123456_abcdef12.png"
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /natal-chart-image:
+    post:
+      summary: Generate a natal chart and return image directly
+      operationId: generateNatalChartImage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NatalChartRequest'
+      responses:
+        '200':
+          description: Natal chart image generated successfully
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
         '401':
           description: Unauthorized
         '500':
@@ -78,45 +69,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                first_name:
-                  type: string
-                last_name:
-                  type: string
-                birth_day:
-                  type: integer
-                birth_month:
-                  type: integer
-                birth_year:
-                  type: integer
-                birth_time:
-                  type: string
-                  format: time
-                  pattern: '^\d{2}:\d{2}$'
-                birth_place:
-                  type: string
-                latitude:
-                  type: number
-                longitude:
-                  type: number
-                today_day:
-                  type: integer
-                today_month:
-                  type: integer
-                today_year:
-                  type: integer
-                today_time:
-                  type: string
-                  format: time
-                  pattern: '^\d{2}:\d{2}$'
-              required:
-                - first_name
-                - last_name
-                - birth_day
-                - birth_month
-                - birth_year
-                - birth_time
+              $ref: '#/components/schemas/NatalStatsRequest'
       responses:
         '200':
           description: Natal stats retrieved successfully
@@ -125,15 +78,88 @@ paths:
               schema:
                 type: object
                 properties:
-                  full_report:
+                  status:
                     type: string
-                  sun_sign:
-                    type: string
-                  moon_sign:
-                    type: string
-                  rising_sign:
-                    type: string
+                  data:
+                    type: object
+                    properties:
+                      full_report:
+                        type: string
+                      sun_sign:
+                        type: string
+                      moon_sign:
+                        type: string
+                      rising_sign:
+                        type: string
         '401':
           description: Unauthorized
         '500':
-          description: Internal server error 
+          description: Internal server error
+
+components:
+  schemas:
+    NatalChartRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        birth_day:
+          type: integer
+        birth_month:
+          type: integer
+        birth_year:
+          type: integer
+        birth_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+        birth_place:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+      required:
+        - first_name
+        - last_name
+        - birth_day
+        - birth_month
+        - birth_year
+        - birth_time
+
+    NatalStatsRequest:
+      type: object
+      properties:
+        birth_day:
+          type: integer
+        birth_month:
+          type: integer
+        birth_year:
+          type: integer
+        birth_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+        birth_place:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        today_day:
+          type: integer
+        today_month:
+          type: integer
+        today_year:
+          type: integer
+        today_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+      required:
+        - birth_day
+        - birth_month
+        - birth_year
+        - birth_time 

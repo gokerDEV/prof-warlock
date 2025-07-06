@@ -97,14 +97,14 @@ class PlanetStatusService:
                 dignity = dignity.lower()
                 dignity_img = SVGPathService.render_symbol(dignity, PlanetStatusService.SYMBOL_SIZE)
                 if dignity_img:
-                    
                     # Calculate offset position based on angle
-                    offset_x =  math.cos(angle)
-                    offset_y =  math.sin(angle)
+                    offset_x = PlanetStatusService.SYMBOL_SIZE * math.cos(angle)
+                    offset_y = PlanetStatusService.SYMBOL_SIZE * math.sin(angle)
                     
                     # Apply offset and center the symbol around the point
-                    symbol_x = int(x + offset_x - retrograde_img.size[0]/2)
-                    symbol_y = int(y + offset_y - retrograde_img.size[1]/2)
+                    symbol_x = int(x + offset_x - dignity_img.size[0]/2)
+                    symbol_y = int(y + offset_y - dignity_img.size[1]/2)
+                    
                     chart_image.paste(
                         dignity_img,
                         (symbol_x, symbol_y),

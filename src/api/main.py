@@ -5,7 +5,7 @@ Clean, focused API with proper error handling and security.
 """
 
 import logging
-from fastapi import FastAPI, HTTPException, Request, Query, Depends, Header
+from fastapi import FastAPI, HTTPException, Request, Query, Depends, Header, Response
 from fastapi.responses import JSONResponse
 from typing import Optional, Dict
 from datetime import datetime
@@ -84,7 +84,7 @@ async def verify_api_key(x_api_key: str = Header(..., alias="X-Api-Key")) -> str
         
     Raises:
         HTTPException: If API key is invalid or missing
-    """
+    """    
     if not x_api_key or x_api_key != config.security.API_KEY:
         raise HTTPException(
             status_code=401,
@@ -178,11 +178,12 @@ async def generate_natal_chart(
     Returns:
         JSONResponse: Generated natal chart data and image
     """
+    print('request', request)
     try:
         user_info = {
             "First Name": request.first_name,
             "Last Name": request.last_name,
-            "Date of Birth": f"{request.birth_day}-{request.birth_month}-{request.birth_year} {request.birth_time}",
+            "Date of Birth": f"{request.birth_day:02d}-{request.birth_month:02d}-{request.birth_year} {request.birth_time}",
             "Place of Birth": request.birth_place,
             "Latitude": request.latitude,
             "Longitude": request.longitude
@@ -230,6 +231,60 @@ async def generate_natal_chart(
         }, status_code=500)
 
 
+@app.post("/natal-chart-image")
+async def generate_natal_chart_image(
+    request: NatalChartRequest,
+    api_key: str = Depends(verify_api_key)
+) -> Response:
+    """
+    Generate a natal chart image and return it directly.
+    
+    Args:
+        request: Birth information for natal chart generation
+        api_key: API key for authentication
+        
+    Returns:
+        Response: Generated natal chart image as PNG
+    """
+    try:
+        user_info = {
+            "First Name": request.first_name,
+            "Last Name": request.last_name,
+            "Date of Birth": f"{request.birth_day:02d}-{request.birth_month:02d}-{request.birth_year} {request.birth_time}",
+            "Place of Birth": request.birth_place,
+            "Latitude": request.latitude,
+            "Longitude": request.longitude
+        }
+
+        # Generate natal chart
+        chart_data_bytes = natal_chart_service.generate_chart(user_info)
+
+        # Resize image
+        image = Image.open(io.BytesIO(chart_data_bytes))
+        max_size = 1500
+        image.thumbnail((max_size, max_size), Image.LANCZOS)
+
+        # Save image to bytes
+        output = io.BytesIO()
+        image.save(output, format='PNG')
+        resized_chart_data_bytes = output.getvalue()
+
+        # Return the image directly
+        return Response(
+            content=resized_chart_data_bytes,
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f'attachment; filename="natal_chart_{request.first_name}_{request.last_name}.png"'
+            }
+        )
+    except Exception as e:
+        logger.error(f"💥 Error generating natal chart image: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate natal chart image"
+        )
+
+
 @app.post("/natal-stats")
 async def get_natal_stats(
     request: NatalStatsRequest,
@@ -246,14 +301,21 @@ async def get_natal_stats(
         Dict: Natal stats and transit information
     """
     try:
-        # Get natal stats
+        # Set default values for today's date and time if not provided
+        today = datetime.now()
+        today_day = request.today_day or today.day
+        today_month = request.today_month or today.month
+        today_year = request.today_year or today.year
+        today_time = request.today_time or today.strftime("%H:%M")
+
+        # Get natal stats with padded day and month
         stats = await natal_chart_service.get_natal_stats(
-            birth_datetime=f"{request.birth_day}-{request.birth_month}-{request.birth_year} {request.birth_time}",
+            birth_datetime=f"{request.birth_day:02d}-{request.birth_month:02d}-{request.birth_year} {request.birth_time}",
             birth_place=request.birth_place,
             latitude=request.latitude,
             longitude=request.longitude,
-            today_date=f"{request.today_day}-{request.today_month}-{request.today_year}",
-            today_time=request.today_time
+            today_date=f"{today_day:02d}-{today_month:02d}-{today_year}",
+            today_time=today_time
         )
         
         return {

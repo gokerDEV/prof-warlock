@@ -136,15 +136,46 @@ class DistributionService:
             # Get bodies for this polarity, or empty list if none
             bodies = polarity_bodies.get(polarity, [])
             
-            DistributionService._draw_category_line(
-                draw=draw,
-                bodies=bodies,
-                x=x,
-                y=y,
-                width=rect['width'],
-                height=rect['height'],
-                svg_paths_dir=svg_paths_dir
-            )
+            # If we have more than 10 bodies, split into two lines
+            if len(bodies) > 9:
+                # Calculate the split point for n+1 in first line, n in second line
+                total = len(bodies)
+                n = (total - 1) // 2  # This gives us n where total = 2n + 1
+                first_line = bodies[:n + 1]  # First n+1 bodies
+                second_line = bodies[n + 1:]  # Remaining n bodies
+                
+                # Draw first line in top half
+                DistributionService._draw_category_line(
+                    draw=draw,
+                    bodies=first_line,
+                    x=x,
+                    y=y,
+                    width=rect['width'],
+                    height=rect['height'] // 2,
+                    svg_paths_dir=svg_paths_dir
+                )
+                
+                # Draw second line in bottom half
+                DistributionService._draw_category_line(
+                    draw=draw,
+                    bodies=second_line,
+                    x=x,
+                    y=y + rect['height'] // 2,
+                    width=rect['width'],
+                    height=rect['height'] // 2,
+                    svg_paths_dir=svg_paths_dir
+                )
+            else:
+                # For 10 or fewer bodies, keep the original single-line behavior
+                DistributionService._draw_category_line(
+                    draw=draw,
+                    bodies=bodies,
+                    x=x,
+                    y=y,
+                    width=rect['width'],
+                    height=rect['height'],
+                    svg_paths_dir=svg_paths_dir
+                )
 
     @staticmethod
     def draw_hemisphere_distribution(draw: ImageDraw, stats: Stats, rects: Dict[str, Dict], svg_paths_dir: str) -> None:
