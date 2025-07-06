@@ -306,25 +306,23 @@ async def generate_natal_chart_image(
         # Generate natal chart with QR code
         chart_data_bytes = natal_chart_service.generate_chart(user_info, qr_url=qr_url, template='5')
 
-        # Resize image
+        # Load image and save with 300 DPI
         image = Image.open(io.BytesIO(chart_data_bytes))
-        max_size = 1500
-        image.thumbnail((max_size, max_size), Image.LANCZOS)
-
-        # Save image to bytes
+        
+        # Save image to bytes with 300 DPI
         output = io.BytesIO()
-        image.save(output, format='PNG')
-        resized_chart_data_bytes = output.getvalue()
+        image.save(output, format='PNG', dpi=(300, 300))
+        final_chart_data_bytes = output.getvalue()
 
         # Upload to S3
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        hash_digest = sha256(resized_chart_data_bytes).hexdigest()[:8]
+        hash_digest = sha256(final_chart_data_bytes).hexdigest()[:8]
         s3_filename = f"natal_charts/{timestamp}_{hash_digest}.png"
 
         s3_client.put_object(
             Bucket=config.s3.BUCKET,
             Key=s3_filename,
-            Body=resized_chart_data_bytes,
+            Body=final_chart_data_bytes,
             ContentType='image/png'
         )
 
@@ -346,7 +344,7 @@ async def generate_natal_chart_image(
             "s3_url": s3_url,
             "s3_filename": s3_filename,
             "qr_url": qr_url,
-            "file_size": len(resized_chart_data_bytes),
+            "file_size": len(final_chart_data_bytes),
             "stats": stats_data,
             "status": "completed",
             "updated_at": datetime.now()
@@ -361,9 +359,10 @@ async def generate_natal_chart_image(
 
         # Return the image directly
         return Response(
-            content=resized_chart_data_bytes,
+            content=final_chart_data_bytes,
             media_type="image/png",
             headers={
+                "Content-Type": "image/png",
                 "Content-Disposition": f'attachment; filename="natal_chart_{request.first_name}_{request.last_name}.png"',
                 "X-Mongo-ID": mongo_id,
                 "X-S3-URL": s3_url,
