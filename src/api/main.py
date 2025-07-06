@@ -304,7 +304,7 @@ async def generate_natal_chart_image(
             qr_url = f"https://goker.art/natal/{mongo_id}"
 
         # Generate natal chart with QR code
-        chart_data_bytes = natal_chart_service.generate_chart(user_info, qr_url=qr_url)
+        chart_data_bytes = natal_chart_service.generate_chart(user_info, qr_url=qr_url, template='5')
 
         # Resize image
         image = Image.open(io.BytesIO(chart_data_bytes))
