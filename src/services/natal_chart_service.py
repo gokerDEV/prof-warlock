@@ -335,16 +335,35 @@ class NatalChartService:
                 raise ValueError(f"Could not geocode location: {user_info['Place of Birth']}")
             lat, lon = location.latitude, location.longitude
 
-        # Initialize Zodiac service
-        zodiac = Zodiac(
-            year=dt.year,
-            month=dt.month,
-            day=dt.day,
-            hour=dt.hour,
-            minute=dt.minute,
-            latitude=lat,
-            longitude=lon
+        # Create config first
+        config = Config(
+            chart=ChartConfig(stroke_width=1, ring_thickness_fraction=0.15)
         )
+        config.theme.background = background_color
+        config.theme.foreground = "#393939"
+        config.theme.fire = "#393939"
+        config.theme.earth = "#393939"
+        config.theme.air = "#393939"
+        config.theme.water = "#393939"
+        config.theme.points = "#393939"
+        config.theme.asteroids = "#393939"
+        config.theme.positive = "#393939"
+        config.theme.negative = "#393939"
+        config.theme.others = "#393939"
+        config.theme.dim = "#393939"
+        config.theme.transparency = 0
+
+        # Create natal data with config
+        mimi = Data(
+            name='MiMi',
+            lat=lat,
+            lon=lon,
+            utc_dt=dt_str,
+            config=config
+        )
+
+        # Initialize Zodiac service with natal data
+        zodiac = Zodiac(mimi)
 
         # Get zodiac signs using the service
         sun_sign = zodiac.get_sun_sign()
@@ -397,32 +416,6 @@ class NatalChartService:
         svg_content_hidden = NatalChartService.hide_data_text_elements(svg_content)
         template_svg = cairosvg.svg2png(bytestring=svg_content_hidden.encode('utf-8'), output_width=2480, output_height=3508)
         template_img = Image.open(BytesIO(template_svg)).convert("RGBA")
-
-        
-        config = Config(
-            chart=ChartConfig(stroke_width=1, ring_thickness_fraction=0.15)
-        )
-        config.theme.background = background_color
-        config.theme.foreground = "#393939"
-        config.theme.fire = "#393939"
-        config.theme.earth = "#393939"
-        config.theme.air = "#393939"
-        config.theme.water = "#393939"
-        config.theme.points = "#393939"
-        config.theme.asteroids = "#393939"
-        config.theme.positive = "#393939"
-        config.theme.negative = "#393939"
-        config.theme.others = "#393939"
-        config.theme.dim = "#393939"
-        config.theme.transparency = 0
-        
-        mimi = Data(
-            name='MiMi',
-            lat=lat,
-            lon=lon,
-            utc_dt=dt_str,
-            config=config
-        )
 
         # Create transit data for aspect table
         transit = Data(
@@ -843,22 +836,6 @@ class NatalChartService:
                     raise ValueError(f"Could not geocode location: {birth_place}")
                 lat, lon = location.latitude, location.longitude
 
-            # Initialize Zodiac service
-            zodiac = Zodiac(
-                year=birth_dt.year,
-                month=birth_dt.month,
-                day=birth_dt.day,
-                hour=birth_dt.hour,
-                minute=birth_dt.minute,
-                latitude=lat,
-                longitude=lon
-            )
-
-            # Get zodiac signs
-            sun_sign = zodiac.get_sun_sign()
-            moon_sign = zodiac.get_lunar_sign()
-            ascendant_sign = zodiac.get_ascendant_sign()
-
             # Create natal data
             natal_data = Data(
                 name="Natal",
@@ -867,6 +844,14 @@ class NatalChartService:
                 utc_dt=birth_dt.strftime("%Y-%m-%d %H:%M"),
                 config=Config()
             )
+
+            # Initialize Zodiac service with natal data
+            zodiac = Zodiac(natal_data)
+
+            # Get zodiac signs
+            sun_sign = zodiac.get_sun_sign()
+            moon_sign = zodiac.get_lunar_sign()
+            ascendant_sign = zodiac.get_ascendant_sign()
 
             # Create transit data for today's date
             transit_data = Data(
