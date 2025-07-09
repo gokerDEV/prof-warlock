@@ -151,6 +151,7 @@ async def get_or_generate_daily_stats(
             "date": today_date
         }
         
+        logger.info(f"🔍 Checking daily stats cache for {mongo_id} on {today_date}")
         existing_stats = await natal_daily_collection.find_one(daily_query)
         
         if existing_stats:
@@ -170,6 +171,7 @@ async def get_or_generate_daily_stats(
         current_time = datetime.now().strftime("%H:%M")
         
         # Generate natal stats
+        logger.info(f"⭐ Calling natal_chart_service.get_natal_stats...")
         stats_data = await natal_chart_service.get_natal_stats(
             birth_datetime=f"{birth_day:02d}-{birth_month:02d}-{birth_year} {birth_time}",
             birth_place=birth_place,
@@ -180,6 +182,8 @@ async def get_or_generate_daily_stats(
             timezone=timezone
         )
         
+        logger.info(f"⭐ Received stats_data: {type(stats_data)}")
+        
         # Cache the daily stats
         daily_document = {
             "natal_id": mongo_id,
@@ -188,13 +192,30 @@ async def get_or_generate_daily_stats(
             **stats_data
         }
         
-        await natal_daily_collection.insert_one(daily_document)
-        logger.info(f"💾 Cached daily stats for {mongo_id} on {today_date}")
+        logger.info(f"💾 Inserting daily stats to MongoDB for {mongo_id} on {today_date}")
+        logger.info(f"💾 Document to insert: {daily_document}")
+        
+        insert_result = await natal_daily_collection.insert_one(daily_document)
+        logger.info(f"💾 Insert result: {insert_result.inserted_id}")
+        
+        # Verify insertion
+        verification_query = {
+            "natal_id": mongo_id,
+            "date": today_date
+        }
+        verified_doc = await natal_daily_collection.find_one(verification_query)
+        if verified_doc:
+            logger.info(f"✅ Successfully cached daily stats for {mongo_id} on {today_date}")
+        else:
+            logger.error(f"❌ Failed to verify cached daily stats for {mongo_id} on {today_date}")
         
         return stats_data
         
     except Exception as e:
         logger.error(f"💥 Error getting/generating daily stats: {str(e)}")
+        logger.error(f"💥 Exception type: {type(e)}")
+        import traceback
+        logger.error(f"💥 Traceback: {traceback.format_exc()}")
         # Return empty stats on error
         return {
             "full_report": "Error generating daily stats",
@@ -659,6 +680,58 @@ async def get_natal_stats(
             status_code=500,
             detail=f"Failed to get natal stats: {str(e)}"
         )
+
+
+@app.get("/debug/mongodb")
+async def debug_mongodb(api_key: str = Depends(verify_api_key)):
+    """Debug endpoint to check MongoDB connection and collections."""
+    try:
+        # Test MongoDB connection
+        admin_result = await mongodb_client.admin.command('ismaster')
+        
+        # Get collection counts
+        natal_count = await natal_collection.count_documents({})
+        daily_count = await natal_daily_collection.count_documents({})
+        
+        # Test insert and delete
+        test_doc = {
+            "natal_id": "test_id",
+            "date": "2024-01-01",
+            "created_at": datetime.now(),
+            "test": True
+        }
+        
+        insert_result = await natal_daily_collection.insert_one(test_doc)
+        inserted_id = insert_result.inserted_id
+        
+        # Verify insertion
+        found_doc = await natal_daily_collection.find_one({"_id": inserted_id})
+        
+        # Clean up test document
+        delete_result = await natal_daily_collection.delete_one({"_id": inserted_id})
+        
+        return {
+            "status": "success",
+            "mongodb_connected": True,
+            "admin_command": admin_result,
+            "collections": {
+                "natal": natal_count,
+                "natal_daily": daily_count
+            },
+            "test_insert": {
+                "inserted_id": str(inserted_id),
+                "found_doc": found_doc is not None,
+                "deleted_count": delete_result.deleted_count
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"MongoDB debug error: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "mongodb_connected": False
+        }
 
 
 @app.get("/privacy")
