@@ -56,6 +56,23 @@ s3_client = boto3.client(
 mongodb_client = AsyncIOMotorClient(config.mongodb.uri)
 mongodb_db = mongodb_client[config.mongodb.DATABASE]
 natal_collection = mongodb_db.natal
+natal_daily_collection = mongodb_db.natal_daily
+
+# Create indexes for better performance
+async def create_indexes():
+    """Create necessary indexes for optimal performance."""
+    try:
+        # Create compound index for natal_daily collection for fast lookups
+        await natal_daily_collection.create_index([("natal_id", 1), ("date", 1)], unique=True)
+        logger.info("📇 Created indexes for natal_daily collection")
+    except Exception as e:
+        logger.warning(f"Index creation warning: {e}")
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize application on startup."""
+    await create_indexes()
 
 
 def verify_webhook_token(token: Optional[str] = Query(None)) -> str:
@@ -100,6 +117,93 @@ async def verify_api_key(x_api_key: str = Header(..., alias="X-Api-Key")) -> str
     return x_api_key
 
 
+async def get_or_generate_daily_stats(
+    mongo_id: str,
+    birth_day: int,
+    birth_month: int, 
+    birth_year: int,
+    birth_time: str,
+    birth_place: str,
+    latitude: Optional[float],
+    longitude: Optional[float],
+    timezone: Optional[str],
+    today_date: str
+) -> Dict:
+    """
+    Get daily stats from cache or generate new ones.
+    
+    Args:
+        mongo_id: MongoDB natal chart document ID
+        birth_day, birth_month, birth_year: Birth date components
+        birth_time: Birth time in HH:MM format
+        birth_place: Birth place
+        latitude, longitude: Birth coordinates
+        timezone: Timezone offset
+        today_date: Today's date in YYYY-MM-DD format
+        
+    Returns:
+        Dict: Daily stats data
+    """
+    try:
+        # Check if daily stats already exist for today
+        daily_query = {
+            "natal_id": mongo_id,
+            "date": today_date
+        }
+        
+        existing_stats = await natal_daily_collection.find_one(daily_query)
+        
+        if existing_stats:
+            logger.info(f"📊 Using cached daily stats for {mongo_id} on {today_date}")
+            # Return cached stats (remove MongoDB _id)
+            stats_data = existing_stats.copy()
+            stats_data.pop("_id", None)
+            stats_data.pop("natal_id", None)
+            stats_data.pop("date", None)
+            stats_data.pop("created_at", None)
+            return stats_data
+        
+        # Generate new daily stats
+        logger.info(f"📊 Generating new daily stats for {mongo_id} on {today_date}")
+        
+        # Get current time
+        current_time = datetime.now().strftime("%H:%M")
+        
+        # Generate natal stats
+        stats_data = await natal_chart_service.get_natal_stats(
+            birth_datetime=f"{birth_day:02d}-{birth_month:02d}-{birth_year} {birth_time}",
+            birth_place=birth_place,
+            latitude=latitude,
+            longitude=longitude,
+            today_date=datetime.now().strftime("%d-%m-%Y"),
+            today_time=current_time,
+            timezone=timezone
+        )
+        
+        # Cache the daily stats
+        daily_document = {
+            "natal_id": mongo_id,
+            "date": today_date,
+            "created_at": datetime.now(),
+            **stats_data
+        }
+        
+        await natal_daily_collection.insert_one(daily_document)
+        logger.info(f"💾 Cached daily stats for {mongo_id} on {today_date}")
+        
+        return stats_data
+        
+    except Exception as e:
+        logger.error(f"💥 Error getting/generating daily stats: {str(e)}")
+        # Return empty stats on error
+        return {
+            "full_report": "Error generating daily stats",
+            "sun_sign": "unknown",
+            "moon_sign": "unknown", 
+            "rising_sign": "unknown"
+        }
+
+
 @app.get("/")
 async def health_check():
     """Basic health check endpoint."""
@@ -117,9 +221,16 @@ async def detailed_health_check():
         # Test MongoDB connection
         await mongodb_client.admin.command('ismaster')
         mongodb_status = "connected"
+        
+        # Get collection counts
+        natal_count = await natal_collection.count_documents({})
+        daily_count = await natal_daily_collection.count_documents({})
+        
     except Exception as e:
         logger.error(f"MongoDB connection error: {str(e)}")
         mongodb_status = "disconnected"
+        natal_count = 0
+        daily_count = 0
     
     return {
         "status": "healthy",
@@ -129,10 +240,13 @@ async def detailed_health_check():
             "email_parsing",
             "image_processing",
             "personalized_responses",
-            "mongodb_storage"
+            "mongodb_storage",
+            "daily_stats_caching"
         ],
         "database": {
-            "mongodb": mongodb_status
+            "mongodb": mongodb_status,
+            "natal_charts": natal_count,
+            "daily_stats": daily_count
         }
     }
 
@@ -330,24 +444,12 @@ async def generate_natal_chart_image(
         # Generate S3 URL
         s3_url = f"{config.s3.PUBLIC_URL}{s3_filename}"
 
-        # Get natal stats
-        stats_data = await natal_chart_service.get_natal_stats(
-            birth_datetime=f"{request.birth_day:02d}-{request.birth_month:02d}-{request.birth_year} {request.birth_time}",
-            birth_place=request.birth_place,
-            latitude=request.latitude,
-            longitude=request.longitude,
-            today_date=datetime.now().strftime("%d-%m-%Y"),
-            today_time=datetime.now().strftime("%H:%M"),
-            timezone=request.timezone
-        )
-
-        # Update MongoDB document with complete information
+        # Update MongoDB document with complete information (without stats)
         update_document = {
             "s3_url": s3_url,
             "s3_filename": s3_filename,
             "qr_url": qr_url,
             "file_size": len(final_chart_data_bytes),
-            "stats": stats_data,
             "status": "completed",
             "updated_at": datetime.now()
         }
@@ -452,6 +554,21 @@ async def get_natal_chart_by_id(
             if date_field in document and document[date_field]:
                 document[date_field] = document[date_field].isoformat()
         
+        # Get or generate daily stats
+        today_date = datetime.now().strftime("%Y-%m-%d")
+        daily_stats = await get_or_generate_daily_stats(
+            mongo_id=mongo_id,
+            birth_day=document.get("birth_day"),
+            birth_month=document.get("birth_month"),
+            birth_year=document.get("birth_year"),
+            birth_time=document.get("birth_time"),
+            birth_place=document.get("birth_place"),
+            latitude=document.get("latitude"),
+            longitude=document.get("longitude"),
+            timezone=document.get("timezone"),
+            today_date=today_date
+        )
+
         # Create response with organized data
         response_data = {
             "id": document["_id"],
@@ -474,7 +591,7 @@ async def get_natal_chart_by_id(
                 "file_size": document.get("file_size"),
                 "status": document.get("status", "unknown")
             },
-            "stats": document.get("stats"),
+            "stats": daily_stats,
             "metadata": {
                 "created_at": document.get("created_at"),
                 "updated_at": document.get("updated_at")

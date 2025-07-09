@@ -459,10 +459,11 @@ components:
                   description: Chart generation status
             stats:
               type: object
+              description: Daily natal stats generated on-demand with transit information for today
               properties:
                 full_report:
                   type: string
-                  description: Full natal chart report in markdown
+                  description: Full natal chart report in markdown with current transits
                 sun_sign:
                   type: string
                   description: Sun sign
