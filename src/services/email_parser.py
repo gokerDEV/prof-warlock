@@ -226,10 +226,10 @@ class EmailParsingService:
             if msg.is_multipart():
                 for part in msg.walk():
                     if part.get_content_type() == "text/plain":
-                        body = part.get_payload(decode=True).decode()
+                        body = part.get_payload(decode=True).decode('utf-8', errors='ignore')
                         break
             else:
-                body = msg.get_payload(decode=True).decode()
+                body = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
             
             # Extract birth information using transformers
             birth_info = self.extract_birth_info(body)

@@ -209,7 +209,7 @@ async def generate_natal_chart(
         }
 
         # Generate natal chart
-        chart_data_bytes = natal_chart_service.generate_chart(user_info)
+        chart_data_bytes = natal_chart_service.generate_chart(user_info, timezone=request.timezone)
 
         # Resize image
         image = Image.open(io.BytesIO(chart_data_bytes))
@@ -278,6 +278,7 @@ async def generate_natal_chart_image(
             "birth_place": request.birth_place,
             "latitude": request.latitude,
             "longitude": request.longitude,
+            "timezone": request.timezone,
             "lang": request.lang or "en",
             "created_at": datetime.now(),
             "status": "generating"
@@ -304,7 +305,7 @@ async def generate_natal_chart_image(
             qr_url = f"https://goker.art/natal/{mongo_id}"
 
         # Generate natal chart with QR code
-        chart_data_bytes = natal_chart_service.generate_chart(user_info, qr_url=qr_url, template='5')
+        chart_data_bytes = natal_chart_service.generate_chart(user_info, qr_url=qr_url, template='5', timezone=request.timezone)
 
         # Load image and save with 300 DPI
         image = Image.open(io.BytesIO(chart_data_bytes))
@@ -336,7 +337,8 @@ async def generate_natal_chart_image(
             latitude=request.latitude,
             longitude=request.longitude,
             today_date=datetime.now().strftime("%d-%m-%Y"),
-            today_time=datetime.now().strftime("%H:%M")
+            today_time=datetime.now().strftime("%H:%M"),
+            timezone=request.timezone
         )
 
         # Update MongoDB document with complete information
@@ -463,6 +465,7 @@ async def get_natal_chart_by_id(
                 "birth_place": document.get("birth_place"),
                 "latitude": document.get("latitude"),
                 "longitude": document.get("longitude"),
+                "timezone": document.get("timezone"),
                 "lang": document.get("lang", "en")
             },
             "chart_info": {
@@ -524,7 +527,8 @@ async def get_natal_stats(
             latitude=request.latitude,
             longitude=request.longitude,
             today_date=f"{today_day:02d}-{today_month:02d}-{today_year}",
-            today_time=today_time
+            today_time=today_time,
+            timezone=request.timezone
         )
         
         return {

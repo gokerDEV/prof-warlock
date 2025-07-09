@@ -13,7 +13,7 @@ from natal.chart import Chart
 from io import BytesIO
 from geopy.geocoders import Nominatim
 from natal.data import Data
-from datetime import datetime
+from datetime import datetime, timedelta
 import cairosvg
 from PIL import Image, ImageDraw, ImageFont
 import os
@@ -51,6 +51,33 @@ class NatalChartService:
                 logging.error(f"Failed to initialize QA pipeline: {e}")
                 raise RuntimeError("Could not initialize the question-answering model.") from e
         return NatalChartService._qa_pipeline
+
+    @staticmethod
+    def _convert_local_to_utc(local_datetime: datetime, timezone_offset: str) -> datetime:
+        """
+        Convert local datetime to UTC based on timezone offset.
+        
+        Args:
+            local_datetime: Local datetime object
+            timezone_offset: Timezone offset in format "+/-HH:MM" (e.g., "+03:00", "-05:00")
+            
+        Returns:
+            datetime: UTC datetime
+        """
+        if not timezone_offset:
+            return local_datetime
+            
+        # Parse timezone offset
+        sign = 1 if timezone_offset[0] == '+' else -1
+        hours, minutes = map(int, timezone_offset[1:].split(':'))
+        
+        # Calculate offset in total minutes
+        total_minutes = sign * (hours * 60 + minutes)
+        
+        # Convert to UTC by subtracting the timezone offset
+        utc_datetime = local_datetime - timedelta(minutes=total_minutes)
+        
+        return utc_datetime
 
     @staticmethod
     def _parse_with_transformers(body: str) -> Dict[str, str]:
@@ -230,6 +257,12 @@ class NatalChartService:
     def _draw_rotated_text(draw: ImageDraw.ImageDraw, text: str, x: float, y: float, width: float, height: float, 
                           angle: float, font: ImageFont.FreeTypeFont, fill: tuple, arc: Optional[float] = None) -> Tuple[Image.Image, tuple]:
         """Helper function to draw rotated and centered text in a box, optionally along an arc."""
+        # Ensure text is properly encoded for Turkish characters
+        try:
+            text = text.encode('utf-8', errors='ignore').decode('utf-8')
+        except Exception as e:
+            logger.warning(f"Error encoding text for drawing: {e}")
+            text = "Text Error"
         if arc is not None:
             radius = abs(arc)
             center_x, center_y = abs(x) + arc /2, abs(y) + arc
@@ -307,7 +340,7 @@ class NatalChartService:
     #     AspectMatrixService.draw_aspect_matrix(draw, grid, center_x, center_y, svg_paths_dir)
 
     @staticmethod
-    def generate_chart(user_info: Dict[str, str], template: str = '4', background_color: str = "#ffffff", font_size: int = 48, text_color: tuple = (30, 30, 30, 255), qr_url: str = None) -> bytes:
+    def generate_chart(user_info: Dict[str, str], template: str = '4', background_color: str = "#ffffff", font_size: int = 48, text_color: tuple = (30, 30, 30, 255), qr_url: str = None, timezone: Optional[str] = None) -> bytes:
         """Generate a natal chart PNG, corrected to pass tests and accept flexible date formats."""
         date_str = user_info["Date of Birth"]
         if not date_str or date_str == "invalid-date":
@@ -317,10 +350,19 @@ class NatalChartService:
             date_str += " 00:00"
 
         try:
-            date_str = NatalChartService._flexible_parse_date(date_str)
-            dt = datetime.strptime(date_str, "%d-%m-%Y %H:%M")
-            dt_str = dt.strftime("%Y-%m-%d %H:%M")
-            logger.debug(f"Parsed date {date_str} to {dt_str}")
+            # Parse the date for display (this will be shown on the chart)
+            display_date_str = NatalChartService._flexible_parse_date(date_str)
+            display_dt = datetime.strptime(display_date_str, "%d-%m-%Y %H:%M")
+            
+            # Convert to UTC for chart calculation if timezone is provided
+            if timezone:
+                utc_dt = NatalChartService._convert_local_to_utc(display_dt, timezone)
+                chart_dt_str = utc_dt.strftime("%Y-%m-%d %H:%M")
+                logger.debug(f"Local time: {display_date_str}, UTC time for chart: {chart_dt_str}")
+            else:
+                chart_dt_str = display_dt.strftime("%Y-%m-%d %H:%M")
+                logger.debug(f"No timezone provided, using local time: {chart_dt_str}")
+                
         except Exception as e:
             logger.error(f"Failed to parse date {date_str}: {str(e)}")
             raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
@@ -353,12 +395,12 @@ class NatalChartService:
         config.theme.dim = "#393939"
         config.theme.transparency = 0
 
-        # Create natal data with config
+        # Create natal data with config using UTC time for chart calculation
         mimi = Data(
             name='MiMi',
             lat=lat,
             lon=lon,
-            utc_dt=dt_str,
+            utc_dt=chart_dt_str,
             config=config
         )
 
@@ -380,7 +422,7 @@ class NatalChartService:
 
         # Read the signs SVG template
         signs_svg_path = assets_path / 'zodiac' / 'signs.svg'
-        with open(signs_svg_path, 'r') as f:
+        with open(signs_svg_path, 'r', encoding='utf-8') as f:
             signs_svg_content = f.read()
 
         # Create sun sign SVG by hiding other signs and making current sign white
@@ -407,10 +449,19 @@ class NatalChartService:
         moon_img = Image.open(BytesIO(moon_svg)).convert("RGBA")
 
         template_path = assets_path / f'template_{template}.svg'
-        with open(template_path, 'r') as f:
+        with open(template_path, 'r', encoding='utf-8') as f:
             svg_content = f.read()
 
-        user_name = f"{user_info.get('First Name', '')} {user_info.get('Last Name', '')}".strip()
+        # Safely handle user name with Turkish characters
+        first_name = user_info.get('First Name', '')
+        last_name = user_info.get('Last Name', '')
+        try:
+            user_name = f"{first_name} {last_name}".strip()
+            # Ensure proper UTF-8 encoding for Turkish characters
+            user_name = user_name.encode('utf-8', errors='ignore').decode('utf-8')
+        except Exception as e:
+            logger.warning(f"Error processing user name: {e}")
+            user_name = "User Name"
 
         # Hide data group
         svg_content_hidden = NatalChartService.hide_data_text_elements(svg_content)
@@ -422,7 +473,7 @@ class NatalChartService:
             name="Transit",
             lat=lat,
             lon=lon,
-            utc_dt=dt_str,
+            utc_dt=chart_dt_str,
             config=config
         )
 
@@ -496,9 +547,18 @@ class NatalChartService:
         # Draw each text element individually
         if 'birth-place' in rects:
             info = rects['birth-place']
+            # Safely handle birth place with Turkish characters
+            try:
+                birth_place = user_info["Place of Birth"]
+                # Ensure proper UTF-8 encoding for Turkish characters
+                birth_place = birth_place.encode('utf-8', errors='ignore').decode('utf-8')
+            except Exception as e:
+                logger.warning(f"Error processing birth place: {e}")
+                birth_place = "Birth Place"
+                
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw=ImageDraw.Draw(canvas), 
-                text=user_info["Place of Birth"], 
+                text=birth_place, 
                 x=info['center_x'] - info['width']/2,
                 y=info['center_y'] - info['height']/2,
                 width=info['width'], 
@@ -512,9 +572,10 @@ class NatalChartService:
 
         if 'birth-date' in rects:
             info = rects['birth-date']
+            # Use display_date_str (local time) for chart display
             rotated, pos = NatalChartService._draw_rotated_text(
                 draw=ImageDraw.Draw(canvas),
-                text=date_str,
+                text=display_date_str,
                 x=info['center_x'] - info['width']/2,
                 y=info['center_y'] - info['height']/2,
                 width=info['width'],
@@ -801,9 +862,9 @@ class NatalChartService:
             if g.tag.endswith('g') and g.attrib.get('id') == 'data':
                 g.attrib['opacity'] = '0'
                 break
-        return ET.tostring(root, encoding='unicode')
+        return ET.tostring(root, encoding='utf-8').decode('utf-8')
 
-    async def get_natal_stats(self, birth_datetime: str, birth_place: str, today_date: str, today_time: str, latitude: Optional[float] = None, longitude: Optional[float] = None) -> Dict:
+    async def get_natal_stats(self, birth_datetime: str, birth_place: str, today_date: str, today_time: str, latitude: Optional[float] = None, longitude: Optional[float] = None, timezone: Optional[str] = None) -> Dict:
         """
         Calculate natal stats including sun sign, moon sign, rising sign, and transit information.
         
@@ -814,6 +875,7 @@ class NatalChartService:
             today_time: Current time in 'HH:MM' format
             latitude: Latitude for birth location (optional)
             longitude: Longitude for birth location (optional)
+            timezone: Timezone offset in +/-HH:MM format (optional)
         
         Returns:
             Dict: Natal stats and transit information
@@ -824,6 +886,16 @@ class NatalChartService:
 
             # Parse today's date and time
             today_dt = datetime.strptime(f"{today_date} {today_time}", "%d-%m-%Y %H:%M")
+
+            # Convert to UTC if timezone is provided
+            if timezone:
+                birth_utc_dt = self._convert_local_to_utc(birth_dt, timezone)
+                today_utc_dt = self._convert_local_to_utc(today_dt, timezone)
+                logger.debug(f"Birth - Local: {birth_dt}, UTC: {birth_utc_dt}")
+                logger.debug(f"Today - Local: {today_dt}, UTC: {today_utc_dt}")
+            else:
+                birth_utc_dt = birth_dt
+                today_utc_dt = today_dt
 
             # Use provided latitude and longitude if available
             if latitude is not None and longitude is not None:
@@ -836,12 +908,12 @@ class NatalChartService:
                     raise ValueError(f"Could not geocode location: {birth_place}")
                 lat, lon = location.latitude, location.longitude
 
-            # Create natal data
+            # Create natal data with UTC time
             natal_data = Data(
                 name="Natal",
                 lat=lat,
                 lon=lon,
-                utc_dt=birth_dt.strftime("%Y-%m-%d %H:%M"),
+                utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
                 config=Config()
             )
 
@@ -853,20 +925,29 @@ class NatalChartService:
             moon_sign = zodiac.get_lunar_sign()
             ascendant_sign = zodiac.get_ascendant_sign()
 
-            # Create transit data for today's date
+            # Create transit data for today's date with UTC time
             transit_data = Data(
                 name="Transit",
                 lat=lat,
                 lon=lon,
-                utc_dt=today_dt.strftime("%Y-%m-%d %H:%M"),
+                utc_dt=today_utc_dt.strftime("%Y-%m-%d %H:%M"),
                 config=Config()
             )
 
             # Calculate stats
             stats = Stats(data1=natal_data, data2=transit_data)
 
-            # Generate full report in markdown
-            full_report_markdown = stats.full_report(kind="markdown")
+            # Generate full report in markdown with proper encoding handling
+            try:
+                full_report_markdown = stats.full_report(kind="markdown")
+                # Ensure the report is properly encoded as UTF-8
+                if isinstance(full_report_markdown, bytes):
+                    full_report_markdown = full_report_markdown.decode('utf-8', errors='ignore')
+                # Handle any potential encoding issues with Turkish characters
+                full_report_markdown = full_report_markdown.encode('utf-8', errors='ignore').decode('utf-8')
+            except Exception as e:
+                logger.warning(f"Failed to generate full report: {e}")
+                full_report_markdown = "Report generation failed due to encoding issues."
 
             # Return the full report and essential stats
             return {

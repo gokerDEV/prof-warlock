@@ -304,6 +304,10 @@ components:
           minimum: -180
           maximum: 180
           description: Longitude coordinate
+        timezone:
+          type: string
+          pattern: '^[+-]\d{1,2}:\d{2}$'
+          description: Timezone offset in +/-HH:MM format (e.g., +03:00, -05:00)
         lang:
           type: string
           enum: [en, tr]
@@ -353,6 +357,10 @@ components:
           minimum: -180
           maximum: 180
           description: Longitude coordinate
+        timezone:
+          type: string
+          pattern: '^[+-]\d{1,2}:\d{2}$'
+          description: Timezone offset in +/-HH:MM format (e.g., +03:00, -05:00)
         today_day:
           type: integer
           minimum: 1
@@ -427,6 +435,9 @@ components:
                    type: number
                  longitude:
                    type: number
+                 timezone:
+                   type: string
+                   description: Timezone offset in +/-HH:MM format
                  lang:
                    type: string
                    description: Language code (en=English, tr=Turkish)

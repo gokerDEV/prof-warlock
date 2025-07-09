@@ -6,7 +6,8 @@ Clean representation of core business entities.
 
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+import re
 
 
 @dataclass
@@ -90,6 +91,7 @@ class NatalChartRequest(BaseModel):
     birth_place: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    timezone: Optional[str] = Field(None, pattern=r'^[+-]\d{1,2}:\d{2}$')  # Format: +/-HH:MM
     lang: Optional[str] = "en"  # Language code: en, tr
 
     class Config:
@@ -105,6 +107,7 @@ class NatalChartRequest(BaseModel):
                 "birth_place": "New York",
                 "latitude": 40.7128,
                 "longitude": -74.0060,
+                "timezone": "+05:00",
                 "lang": "en"
             }
         }
@@ -119,6 +122,7 @@ class NatalStatsRequest(BaseModel):
     birth_place: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    timezone: Optional[str] = Field(None, pattern=r'^[+-]\d{1,2}:\d{2}$')  # Format: +/-HH:MM
     today_day: Optional[int] = None
     today_month: Optional[int] = None
     today_year: Optional[int] = None
@@ -135,6 +139,7 @@ class NatalStatsRequest(BaseModel):
                 "birth_place": "New York",
                 "latitude": 40.7128,
                 "longitude": -74.0060,
+                "timezone": "+05:00",
                 "today_day": 4,
                 "today_month": 1,
                 "today_year": 2024,
