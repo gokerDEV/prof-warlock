@@ -250,6 +250,13 @@ paths:
   /natal-transit-location/{mongo_id}:
     post:
       summary: Get natal transit location data (premium endpoint)
+      description: |
+        Calculate transit data for current location. 
+        
+        **Timezone Handling:**
+        - today_time must be UTC-0 (no timezone conversion needed)
+        - Birth chart uses original birth location and timezone
+        - Transits are calculated for the current location
       operationId: getNatalTransitLocation
       security:
         - ApiKeyAuth: []
@@ -287,6 +294,14 @@ paths:
   /natal-transit-relocation/{mongo_id}:
     post:
       summary: Get natal transit relocation data (premium endpoint)
+      description: |
+        Calculate transit data for relocation chart.
+        
+        **Timezone Handling:**
+        - Timezone is REQUIRED for relocation charts
+        - Transit times are always calculated in UTC-0
+        - Birth chart is calculated as if born at relocation location with relocation timezone
+        - Transits are calculated for the relocation location
       operationId: getNatalTransitRelocation
       security:
         - ApiKeyAuth: []
@@ -775,10 +790,6 @@ components:
           minimum: -180
           maximum: 180
           description: Current longitude coordinate
-        timezone:
-          type: string
-          pattern: '^[+-]\d{1,2}:\d{2}$'
-          description: Timezone offset in +/-HH:MM format (e.g., +03:00, -05:00)
         today_day:
           type: integer
           minimum: 1
@@ -798,7 +809,7 @@ components:
           type: string
           format: time
           pattern: '^\d{2}:\d{2}$'
-          description: Today's time in HH:MM format, optional
+          description: Today's time in HH:MM format (must be UTC-0), optional
       required:
         - birth_day
         - birth_month
@@ -815,7 +826,6 @@ components:
          current_location: "Los Angeles"
          current_latitude: 34.0522
          current_longitude: -118.2437
-         timezone: "-05:00"
          today_day: 4
          today_month: 1
          today_year: 2024
@@ -860,7 +870,7 @@ components:
         timezone:
           type: string
           pattern: '^[+-]\d{1,2}:\d{2}$'
-          description: Timezone offset in +/-HH:MM format (e.g., +03:00, -05:00)
+          description: Timezone offset for relocation location in +/-HH:MM format (e.g., +03:00, -05:00). REQUIRED for relocation charts.
         today_day:
           type: integer
           minimum: 1
@@ -880,7 +890,7 @@ components:
           type: string
           format: time
           pattern: '^\d{2}:\d{2}$'
-          description: Today's time in HH:MM format, optional
+          description: Today's time in HH:MM format (will be converted to UTC-0), optional
       required:
         - birth_day
         - birth_month
@@ -889,6 +899,7 @@ components:
         - relocation_location
         - relocation_latitude
         - relocation_longitude
+        - timezone
       example:
          birth_day: 1
          birth_month: 1

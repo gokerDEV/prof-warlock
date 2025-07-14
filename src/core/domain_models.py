@@ -176,7 +176,11 @@ class NatalTransitRequest(BaseModel):
 
 
 class NatalTransitLocationRequest(BaseModel):
-    """Request model for natal transit location (premium) endpoint."""
+    """Request model for natal transit location (premium) endpoint.
+    
+    NOTE: For location-based charts, today_time must be UTC-0.
+    No timezone field needed since today_time is already UTC-0.
+    """
     birth_day: int
     birth_month: int
     birth_year: int
@@ -184,11 +188,10 @@ class NatalTransitLocationRequest(BaseModel):
     current_location: str
     current_latitude: float
     current_longitude: float
-    timezone: Optional[str] = Field(None, pattern=r'^[+-]\d{1,2}:\d{2}$')  # Format: +/-HH:MM
     today_day: Optional[int] = None
     today_month: Optional[int] = None
     today_year: Optional[int] = None
-    today_time: Optional[str] = None  # Format: HH:MM
+    today_time: Optional[str] = None  # Format: HH:MM (must be UTC-0)
 
     class Config:
         """Pydantic model configuration."""
@@ -201,7 +204,6 @@ class NatalTransitLocationRequest(BaseModel):
                 "current_location": "Los Angeles",
                 "current_latitude": 34.0522,
                 "current_longitude": -118.2437,
-                "timezone": "-05:00",
                 "today_day": 4,
                 "today_month": 1,
                 "today_year": 2024,
@@ -211,7 +213,12 @@ class NatalTransitLocationRequest(BaseModel):
 
 
 class NatalTransitRelocationRequest(BaseModel):
-    """Request model for natal transit relocation (premium) endpoint."""
+    """Request model for natal transit relocation (premium) endpoint.
+    
+    NOTE: For relocation charts, timezone is REQUIRED as the natal chart is 
+    calculated as if born at the relocation location with its timezone.
+    Transit times are always calculated in UTC-0.
+    """
     birth_day: int
     birth_month: int
     birth_year: int
@@ -219,11 +226,11 @@ class NatalTransitRelocationRequest(BaseModel):
     relocation_location: str
     relocation_latitude: float
     relocation_longitude: float
-    timezone: Optional[str] = Field(None, pattern=r'^[+-]\d{1,2}:\d{2}$')  # Format: +/-HH:MM
+    timezone: str = Field(..., pattern=r'^[+-]\d{1,2}:\d{2}$')  # Format: +/-HH:MM (REQUIRED for relocation)
     today_day: Optional[int] = None
     today_month: Optional[int] = None
     today_year: Optional[int] = None
-    today_time: Optional[str] = None  # Format: HH:MM
+    today_time: Optional[str] = None  # Format: HH:MM (will be converted to UTC-0)
 
     class Config:
         """Pydantic model configuration."""
