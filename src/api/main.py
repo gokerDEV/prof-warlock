@@ -68,10 +68,8 @@ natal_daily_collection = mongodb_db.natal_daily
 async def create_indexes():
     """Create necessary indexes for optimal performance."""
     try:
-        # Create compound index for natal_daily collection for fast lookups
-        await natal_daily_collection.create_index([("natal_id", 1), ("date", 1)], unique=True)
-        
-        # Create new compound index for natal_daily with type field for new endpoints
+        # Create compound index for natal_daily collection with type field for proper caching
+        # This allows different chart types (classic, location, relocation) for the same date
         await natal_daily_collection.create_index([("natal_id", 1), ("type", 1), ("date", 1)], unique=True)
         
         # Create TTL index for automatic cleanup of old cache entries (2 days)
@@ -334,40 +332,93 @@ async def get_or_generate_transit_cache(
         # Generate transit data based on chart type
         if chart_type == "classic":
             # Generate classic transit data
-            transit_data = await natal_chart_service.get_natal_stats(
-                birth_datetime=birth_datetime,
-                birth_place=birth_document.get("birth_place"),
-                latitude=birth_document.get("latitude"),
-                longitude=birth_document.get("longitude"),
-                today_date=today_date.replace("-", "-"),  # Convert to DD-MM-YYYY
-                today_time=today_time,
-                timezone=birth_document.get("timezone")
-            )
+            logger.info(f"🔄 Generating classic transit data for {mongo_id}")
+            logger.info(f"🔄 Birth datetime: {birth_datetime}")
+            logger.info(f"🔄 Birth place: {birth_document.get('birth_place')}")
+            logger.info(f"🔄 Latitude: {birth_document.get('latitude')}")
+            logger.info(f"🔄 Longitude: {birth_document.get('longitude')}")
+            logger.info(f"🔄 Today date: {'-'.join(today_date.split('-')[::-1])}")
+            logger.info(f"🔄 Today time: {today_time}")
+            logger.info(f"🔄 Timezone: {birth_document.get('timezone')}")
+            
+            try:
+                transit_data = await natal_chart_service.get_natal_stats(
+                    birth_datetime=birth_datetime,
+                    birth_place=birth_document.get("birth_place"),
+                    latitude=birth_document.get("latitude"),
+                    longitude=birth_document.get("longitude"),
+                    today_date='-'.join(today_date.split('-')[::-1]),  # Convert YYYY-MM-DD to DD-MM-YYYY
+                    today_time=today_time,
+                    timezone=birth_document.get("timezone")
+                )
+                
+                logger.info(f"🔄 Generated transit data keys: {list(transit_data.keys())}")
+                logger.info(f"🔄 Sun sign: {transit_data.get('sun_sign')}")
+                logger.info(f"🔄 Full report length: {len(transit_data.get('full_report', ''))}")
+                
+            except Exception as stats_error:
+                logger.error(f"🔄 Error in get_natal_stats: {str(stats_error)}")
+                import traceback
+                logger.error(f"🔄 Traceback: {traceback.format_exc()}")
+                raise stats_error
         elif chart_type == "location":
-            # Generate location-based transit data (synastry with current location)
-            transit_data = await natal_chart_service.get_natal_stats(
-                birth_datetime=birth_datetime,
-                birth_place=birth_document.get("birth_place"),
-                latitude=birth_document.get("latitude"),
-                longitude=birth_document.get("longitude"),
-                today_date=today_date.replace("-", "-"),  # Convert to DD-MM-YYYY
-                today_time=today_time,
-                timezone=birth_document.get("timezone"),
-                current_location=location_params.get("current_location"),
-                current_latitude=location_params.get("current_latitude"),
-                current_longitude=location_params.get("current_longitude")
-            )
+            # Generate location-based transit data using current location for transits
+            # For location-based charts, we calculate transits at the current location
+            logger.info(f"🔄 Generating location transit data for {mongo_id}")
+            logger.info(f"🔄 Current location: {location_params.get('current_location')}")
+            logger.info(f"🔄 Current latitude: {location_params.get('current_latitude')}")
+            logger.info(f"🔄 Current longitude: {location_params.get('current_longitude')}")
+            
+            try:
+                # Use current location for the transit calculation
+                transit_data = await natal_chart_service.get_natal_stats(
+                    birth_datetime=birth_datetime,
+                    birth_place=location_params.get("current_location") or birth_document.get("birth_place"),
+                    latitude=location_params.get("current_latitude") or birth_document.get("latitude"),
+                    longitude=location_params.get("current_longitude") or birth_document.get("longitude"),
+                    today_date='-'.join(today_date.split('-')[::-1]),  # Convert YYYY-MM-DD to DD-MM-YYYY
+                    today_time=today_time,
+                    timezone=birth_document.get("timezone")
+                )
+                
+                logger.info(f"🔄 Generated location transit data keys: {list(transit_data.keys())}")
+                logger.info(f"🔄 Sun sign: {transit_data.get('sun_sign')}")
+                logger.info(f"🔄 Full report length: {len(transit_data.get('full_report', ''))}")
+                
+            except Exception as stats_error:
+                logger.error(f"🔄 Error in location get_natal_stats: {str(stats_error)}")
+                import traceback
+                logger.error(f"🔄 Location traceback: {traceback.format_exc()}")
+                raise stats_error
+            
         elif chart_type == "relocation":
-            # Generate relocation-based transit data
-            transit_data = await natal_chart_service.get_natal_stats(
-                birth_datetime=birth_datetime,
-                birth_place=location_params.get("relocation_location"),
-                latitude=location_params.get("relocation_latitude"),
-                longitude=location_params.get("relocation_longitude"),
-                today_date=today_date.replace("-", "-"),  # Convert to DD-MM-YYYY
-                today_time=today_time,
-                timezone=birth_document.get("timezone")
-            )
+            # Generate relocation-based transit data using relocated birth location
+            # For relocation charts, we treat the relocation as the new birth location
+            logger.info(f"🔄 Generating relocation transit data for {mongo_id}")
+            logger.info(f"🔄 Relocation location: {location_params.get('relocation_location')}")
+            logger.info(f"🔄 Relocation latitude: {location_params.get('relocation_latitude')}")
+            logger.info(f"🔄 Relocation longitude: {location_params.get('relocation_longitude')}")
+            
+            try:
+                transit_data = await natal_chart_service.get_natal_stats(
+                    birth_datetime=birth_datetime,
+                    birth_place=location_params.get("relocation_location") or birth_document.get("birth_place"),
+                    latitude=location_params.get("relocation_latitude") or birth_document.get("latitude"),
+                    longitude=location_params.get("relocation_longitude") or birth_document.get("longitude"),
+                    today_date='-'.join(today_date.split('-')[::-1]),  # Convert YYYY-MM-DD to DD-MM-YYYY
+                    today_time=today_time,
+                    timezone=birth_document.get("timezone")
+                )
+                
+                logger.info(f"🔄 Generated relocation transit data keys: {list(transit_data.keys())}")
+                logger.info(f"🔄 Sun sign: {transit_data.get('sun_sign')}")
+                logger.info(f"🔄 Full report length: {len(transit_data.get('full_report', ''))}")
+                
+            except Exception as stats_error:
+                logger.error(f"🔄 Error in relocation get_natal_stats: {str(stats_error)}")
+                import traceback
+                logger.error(f"🔄 Relocation traceback: {traceback.format_exc()}")
+                raise stats_error
         else:
             raise ValueError(f"Unknown chart type: {chart_type}")
         
