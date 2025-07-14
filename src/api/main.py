@@ -5,7 +5,7 @@ Clean, focused API with proper error handling and security.
 """
 
 import logging
-from fastapi import FastAPI, HTTPException, Query, Depends, Header, Response
+from fastapi import FastAPI, HTTPException, Request, Query, Depends, Header, Response
 from fastapi.responses import JSONResponse
 from typing import Optional, Dict
 from datetime import datetime
@@ -422,92 +422,25 @@ async def health_check():
 
 
 @app.post("/natal-chart")
-async def generate_natal_chart(
+async def create_natal_chart_record(
     request: NatalChartRequest,
+    purchased: bool = Query(False, description="Premium access status"),
     api_key: str = Depends(verify_api_key)
 ) -> JSONResponse:
     """
-    Generate a natal chart based on birth information.
+    Create a natal chart record in the database.
     
     Args:
-        request: Birth information for natal chart generation
+        request: Birth information for natal chart
+        purchased: Premium access status (true/false)
         api_key: API key for authentication
         
     Returns:
-        JSONResponse: Generated natal chart data and image
-    """
-    print('request', request)
-    try:
-        user_info = {
-            "First Name": request.first_name,
-            "Last Name": request.last_name,
-            "Date of Birth": f"{request.birth_day:02d}-{request.birth_month:02d}-{request.birth_year} {request.birth_time}",
-            "Place of Birth": request.birth_place,
-            "Latitude": request.latitude,
-            "Longitude": request.longitude
-        }
-
-        # Generate natal chart
-        chart_data_bytes = natal_chart_service.generate_chart(user_info, timezone=request.timezone)
-
-        # Resize image
-        image = Image.open(io.BytesIO(chart_data_bytes))
-        max_size = 1500
-        image.thumbnail((max_size, max_size), Image.LANCZOS)
-
-        # Save image to bytes
-        output = io.BytesIO()
-        image.save(output, format='PNG')
-        resized_chart_data_bytes = output.getvalue()
-
-        # Create a unique filename
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        hash_digest = sha256(resized_chart_data_bytes).hexdigest()[:8]
-        filename = f"natal_charts/{timestamp}_{hash_digest}.png"
-
-        # Upload to S3
-        s3_client.put_object(
-            Bucket=config.s3.BUCKET,
-            Key=filename,
-            Body=resized_chart_data_bytes,
-            ContentType='image/png'
-        )
-
-        # Generate download link
-        download_link = f"{config.s3.PUBLIC_URL}{filename}"
-
-        return JSONResponse(content=[{
-            "name": "natal_chart.png",
-            "id": filename,
-            "mime_type": "image/png",
-            "download_link": download_link
-        }])
-    except Exception as e:
-        return JSONResponse(content={
-            "status": "error",
-            "message": f"Failed to generate natal chart: {str(e)}"
-        }, status_code=500)
-
-
-@app.post("/natal-chart-image")
-async def generate_natal_chart_image(
-    request: NatalChartRequest,
-    api_key: str = Depends(verify_api_key)
-) -> Response:
-    """
-    Generate a natal chart image and return it directly.
-    Also saves the chart to MongoDB with S3 URL and natal stats.
-    
-    Args:
-        request: Birth information for natal chart generation
-        api_key: API key for authentication
-        
-    Returns:
-        Response: Generated natal chart image as PNG
+        JSONResponse: Created record with MongoDB ID
     """
     try:
-        # First, create a document in MongoDB to get the ID
-        temp_document = {
+        # Create document in MongoDB
+        document = {
             "first_name": request.first_name,
             "last_name": request.last_name,
             "birth_day": request.birth_day,
@@ -519,33 +452,140 @@ async def generate_natal_chart_image(
             "longitude": request.longitude,
             "timezone": request.timezone,
             "lang": request.lang or "en",
-            "purchased": False,  # Default to free tier
+            "purchased": purchased,
             "created_at": datetime.now(),
-            "status": "generating"
+            "status": "created",
+            "s3_url": None,
+            "s3_filename": None,
+            "qr_url": None,
+            "file_size": None
         }
         
-        result = await natal_collection.insert_one(temp_document)
+        result = await natal_collection.insert_one(document)
         mongo_id = str(result.inserted_id)
         
-        logger.info(f"💾 Created temporary MongoDB document with ID: {mongo_id}")
+        logger.info(f"💾 Created natal chart record with ID: {mongo_id}, purchased: {purchased}")
 
-        user_info = {
-            "First Name": request.first_name,
-            "Last Name": request.last_name,
-            "Date of Birth": f"{request.birth_day:02d}-{request.birth_month:02d}-{request.birth_year} {request.birth_time}",
-            "Place of Birth": request.birth_place,
-            "Latitude": request.latitude,
-            "Longitude": request.longitude
-        }
-
-        # Generate QR code URL with MongoDB ID and language parameter
+        # Generate QR code URL
         if request.lang and request.lang != "en":
             qr_url = f"https://goker.art/natal/{mongo_id}?lang={request.lang}"
         else:
             qr_url = f"https://goker.art/natal/{mongo_id}"
 
+        # Update with QR URL
+        await natal_collection.update_one(
+            {"_id": result.inserted_id},
+            {"$set": {"qr_url": qr_url}}
+        )
+
+        return JSONResponse(content={
+            "status": "success",
+            "data": {
+                "id": mongo_id,
+                "purchased": purchased,
+                "qr_url": qr_url,
+                "user_info": {
+                    "first_name": request.first_name,
+                    "last_name": request.last_name,
+                    "birth_day": request.birth_day,
+                    "birth_month": request.birth_month,
+                    "birth_year": request.birth_year,
+                    "birth_time": request.birth_time,
+                    "birth_place": request.birth_place,
+                    "latitude": request.latitude,
+                    "longitude": request.longitude,
+                    "timezone": request.timezone,
+                    "lang": request.lang
+                },
+                "created_at": datetime.now().isoformat()
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"💥 Error creating natal chart record: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create natal chart record: {str(e)}"
+        )
+
+
+@app.post("/natal-chart-image/{mongo_id}")
+async def get_natal_chart_image(
+    mongo_id: str,
+    request: NatalTransitRequest,  # Using for birth validation
+    api_key: str = Depends(verify_api_key)
+) -> Response:
+    """
+    Get natal chart image by ID. Returns from S3 if available, otherwise generates and saves.
+    
+    Args:
+        mongo_id: MongoDB document ID
+        request: Birth information for validation
+        api_key: API key for authentication
+        
+    Returns:
+        Response: Natal chart image as PNG
+    """
+    try:
+        # Validate birth information and get document
+        birth_document = await validate_birth_info(
+            mongo_id=mongo_id,
+            birth_day=request.birth_day,
+            birth_month=request.birth_month,
+            birth_year=request.birth_year,
+            birth_time=request.birth_time
+        )
+        
+        # Check if image already exists in S3
+        s3_url = birth_document.get("s3_url")
+        s3_filename = birth_document.get("s3_filename")
+        
+        if s3_url and s3_filename:
+            try:
+                # Try to get image from S3
+                logger.info(f"📥 Attempting to retrieve existing image from S3: {s3_filename}")
+                s3_response = s3_client.get_object(Bucket=config.s3.BUCKET, Key=s3_filename)
+                image_data = s3_response['Body'].read()
+                
+                logger.info(f"✅ Successfully retrieved image from S3 for {mongo_id}")
+                
+                # Return existing image
+                return Response(
+                    content=image_data,
+                    media_type="image/png",
+                    headers={
+                        "Content-Type": "image/png",
+                        "Content-Disposition": f'inline; filename="natal_chart_{birth_document.get("first_name", "chart")}.png"',
+                        "X-Mongo-ID": mongo_id,
+                        "X-S3-URL": s3_url,
+                        "X-Source": "s3-cache"
+                    }
+                )
+            except Exception as s3_error:
+                logger.warning(f"⚠️ Could not retrieve from S3: {str(s3_error)}, will generate new image")
+
+        # Generate new image if not found in S3
+        logger.info(f"🎨 Generating new natal chart image for {mongo_id}")
+        
+        user_info = {
+            "First Name": birth_document.get("first_name", ""),
+            "Last Name": birth_document.get("last_name", ""),
+            "Date of Birth": f"{birth_document['birth_day']:02d}-{birth_document['birth_month']:02d}-{birth_document['birth_year']} {birth_document['birth_time']}",
+            "Place of Birth": birth_document.get("birth_place", ""),
+            "Latitude": birth_document.get("latitude"),
+            "Longitude": birth_document.get("longitude")
+        }
+
+        # Get QR URL from document
+        qr_url = birth_document.get("qr_url")
+
         # Generate natal chart with QR code
-        chart_data_bytes = natal_chart_service.generate_chart(user_info, qr_url=qr_url, template='5', timezone=request.timezone)
+        chart_data_bytes = natal_chart_service.generate_chart(
+            user_info, 
+            qr_url=qr_url, 
+            template='5', 
+            timezone=birth_document.get("timezone")
+        )
 
         # Load image and save with 300 DPI
         image = Image.open(io.BytesIO(chart_data_bytes))
@@ -570,11 +610,10 @@ async def generate_natal_chart_image(
         # Generate S3 URL
         s3_url = f"{config.s3.PUBLIC_URL}{s3_filename}"
 
-        # Update MongoDB document with complete information (without stats)
+        # Update MongoDB document with S3 information
         update_document = {
             "s3_url": s3_url,
             "s3_filename": s3_filename,
-            "qr_url": qr_url,
             "file_size": len(final_chart_data_bytes),
             "status": "completed",
             "updated_at": datetime.now()
@@ -585,34 +624,37 @@ async def generate_natal_chart_image(
             {"$set": update_document}
         )
         
-        logger.info(f"💾 Updated MongoDB document with S3 URL and stats: {mongo_id}")
+        logger.info(f"💾 Updated MongoDB document with new S3 URL: {mongo_id}")
 
-        # Return the image directly
+        # Return the newly generated image
         return Response(
             content=final_chart_data_bytes,
             media_type="image/png",
             headers={
                 "Content-Type": "image/png",
-                "Content-Disposition": f'attachment; filename="natal_chart_{request.first_name}_{request.last_name}.png"',
+                "Content-Disposition": f'inline; filename="natal_chart_{birth_document.get("first_name", "chart")}.png"',
                 "X-Mongo-ID": mongo_id,
                 "X-S3-URL": s3_url,
-                "X-QR-URL": qr_url
+                "X-QR-URL": qr_url,
+                "X-Source": "generated"
             }
         )
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"💥 Error generating natal chart image: {str(e)}")
-        # If we have a mongo_id, mark the document as failed
-        if 'mongo_id' in locals():
-            try:
-                await natal_collection.update_one(
-                    {"_id": ObjectId(mongo_id)},
-                    {"$set": {"status": "failed", "error": str(e), "updated_at": datetime.now()}}
-                )
-            except:
-                pass
+        logger.error(f"💥 Error getting natal chart image: {str(e)}")
+        # Mark document as failed if we have access to it
+        try:
+            await natal_collection.update_one(
+                {"_id": ObjectId(mongo_id)},
+                {"$set": {"status": "failed", "error": str(e), "updated_at": datetime.now()}}
+            )
+        except:
+            pass
         raise HTTPException(
             status_code=500,
-            detail="Failed to generate natal chart image"
+            detail=f"Failed to get natal chart image: {str(e)}"
         )
 
 
