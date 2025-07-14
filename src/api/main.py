@@ -363,23 +363,104 @@ async def get_or_generate_transit_cache(
                 raise stats_error
         elif chart_type == "location":
             # Generate location-based transit data using current location for transits
-            # For location-based charts, we calculate transits at the current location
+            # For location-based charts: natal at birth location, transits at current location
             logger.info(f"🔄 Generating location transit data for {mongo_id}")
+            logger.info(f"🔄 Birth location: {birth_document.get('birth_place')}")
             logger.info(f"🔄 Current location: {location_params.get('current_location')}")
             logger.info(f"🔄 Current latitude: {location_params.get('current_latitude')}")
             logger.info(f"🔄 Current longitude: {location_params.get('current_longitude')}")
             
             try:
-                # Use current location for the transit calculation
-                transit_data = await natal_chart_service.get_natal_stats(
-                    birth_datetime=birth_datetime,
-                    birth_place=location_params.get("current_location") or birth_document.get("birth_place"),
-                    latitude=location_params.get("current_latitude") or birth_document.get("latitude"),
-                    longitude=location_params.get("current_longitude") or birth_document.get("longitude"),
-                    today_date='-'.join(today_date.split('-')[::-1]),  # Convert YYYY-MM-DD to DD-MM-YYYY
-                    today_time=today_time,
-                    timezone=birth_document.get("timezone")
+                # Create a custom location-based transit calculation
+                # This requires manually creating the Data objects with different locations
+                from natal.data import Data
+                from natal.config import Config
+                from natal.stats import Stats
+                from datetime import datetime
+                
+                # Parse dates
+                birth_dt = datetime.strptime(birth_datetime, "%d-%m-%Y %H:%M")
+                today_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
+                
+                # Convert to UTC if timezone is provided
+                if birth_document.get("timezone"):
+                    birth_utc_dt = natal_chart_service._convert_local_to_utc(birth_dt, birth_document.get("timezone"))
+                    today_utc_dt = natal_chart_service._convert_local_to_utc(today_dt, birth_document.get("timezone"))
+                else:
+                    birth_utc_dt = birth_dt
+                    today_utc_dt = today_dt
+                
+                # Get birth location coordinates
+                birth_lat = birth_document.get("latitude")
+                birth_lon = birth_document.get("longitude")
+                if birth_lat is None or birth_lon is None:
+                    from geopy.geocoders import Nominatim
+                    geolocator = Nominatim(user_agent="prof-warlock")
+                    birth_location = geolocator.geocode(birth_document.get("birth_place"))
+                    if birth_location:
+                        birth_lat, birth_lon = birth_location.latitude, birth_location.longitude
+                    else:
+                        raise ValueError(f"Could not geocode birth place: {birth_document.get('birth_place')}")
+                
+                # Get current location coordinates
+                current_lat = location_params.get("current_latitude")
+                current_lon = location_params.get("current_longitude")
+                if current_lat is None or current_lon is None:
+                    from geopy.geocoders import Nominatim
+                    geolocator = Nominatim(user_agent="prof-warlock")
+                    current_location = geolocator.geocode(location_params.get("current_location"))
+                    if current_location:
+                        current_lat, current_lon = current_location.latitude, current_location.longitude
+                    else:
+                        raise ValueError(f"Could not geocode current location: {location_params.get('current_location')}")
+                
+                # Create natal data at birth location
+                natal_data = Data(
+                    name="Natal",
+                    lat=birth_lat,
+                    lon=birth_lon,
+                    utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
                 )
+                
+                # Create transit data at current location
+                transit_data_obj = Data(
+                    name="Transit",
+                    lat=current_lat,
+                    lon=current_lon,
+                    utc_dt=today_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
+                )
+                
+                # Calculate stats between birth location natal and current location transits
+                stats = Stats(data1=natal_data, data2=transit_data_obj)
+                
+                # Initialize Zodiac service with natal data
+                from src.services.zodiac_service import Zodiac
+                zodiac = Zodiac(natal_data)
+                
+                # Get zodiac signs from natal data
+                sun_sign = zodiac.get_sun_sign()
+                moon_sign = zodiac.get_lunar_sign()
+                ascendant_sign = zodiac.get_ascendant_sign()
+                
+                # Generate full report
+                try:
+                    full_report_markdown = stats.full_report(kind="markdown")
+                    if isinstance(full_report_markdown, bytes):
+                        full_report_markdown = full_report_markdown.decode('utf-8', errors='ignore')
+                    full_report_markdown = full_report_markdown.encode('utf-8', errors='ignore').decode('utf-8')
+                except Exception as e:
+                    logger.warning(f"Failed to generate full report: {e}")
+                    full_report_markdown = "Report generation failed due to encoding issues."
+                
+                # Create the transit_data dict
+                transit_data = {
+                    "full_report": full_report_markdown,
+                    "sun_sign": sun_sign,
+                    "moon_sign": moon_sign,
+                    "rising_sign": ascendant_sign
+                }
                 
                 logger.info(f"🔄 Generated location transit data keys: {list(transit_data.keys())}")
                 logger.info(f"🔄 Sun sign: {transit_data.get('sun_sign')}")
@@ -393,22 +474,92 @@ async def get_or_generate_transit_cache(
             
         elif chart_type == "relocation":
             # Generate relocation-based transit data using relocated birth location
-            # For relocation charts, we treat the relocation as the new birth location
+            # For relocation charts: natal as if born at relocated location, transits at relocated location
             logger.info(f"🔄 Generating relocation transit data for {mongo_id}")
+            logger.info(f"🔄 Original birth location: {birth_document.get('birth_place')}")
             logger.info(f"🔄 Relocation location: {location_params.get('relocation_location')}")
             logger.info(f"🔄 Relocation latitude: {location_params.get('relocation_latitude')}")
             logger.info(f"🔄 Relocation longitude: {location_params.get('relocation_longitude')}")
             
             try:
-                transit_data = await natal_chart_service.get_natal_stats(
-                    birth_datetime=birth_datetime,
-                    birth_place=location_params.get("relocation_location") or birth_document.get("birth_place"),
-                    latitude=location_params.get("relocation_latitude") or birth_document.get("latitude"),
-                    longitude=location_params.get("relocation_longitude") or birth_document.get("longitude"),
-                    today_date='-'.join(today_date.split('-')[::-1]),  # Convert YYYY-MM-DD to DD-MM-YYYY
-                    today_time=today_time,
-                    timezone=birth_document.get("timezone")
+                # Create a custom relocation-based transit calculation
+                # This calculates the natal chart as if born at the relocated location
+                from natal.data import Data
+                from natal.config import Config
+                from natal.stats import Stats
+                from datetime import datetime
+                
+                # Parse dates
+                birth_dt = datetime.strptime(birth_datetime, "%d-%m-%Y %H:%M")
+                today_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
+                
+                # Convert to UTC if timezone is provided
+                if birth_document.get("timezone"):
+                    birth_utc_dt = natal_chart_service._convert_local_to_utc(birth_dt, birth_document.get("timezone"))
+                    today_utc_dt = natal_chart_service._convert_local_to_utc(today_dt, birth_document.get("timezone"))
+                else:
+                    birth_utc_dt = birth_dt
+                    today_utc_dt = today_dt
+                
+                # Get relocation coordinates
+                relocation_lat = location_params.get("relocation_latitude")
+                relocation_lon = location_params.get("relocation_longitude")
+                if relocation_lat is None or relocation_lon is None:
+                    from geopy.geocoders import Nominatim
+                    geolocator = Nominatim(user_agent="prof-warlock")
+                    relocation_location = geolocator.geocode(location_params.get("relocation_location"))
+                    if relocation_location:
+                        relocation_lat, relocation_lon = relocation_location.latitude, relocation_location.longitude
+                    else:
+                        raise ValueError(f"Could not geocode relocation location: {location_params.get('relocation_location')}")
+                
+                # Create natal data at relocated location (as if born there)
+                natal_data = Data(
+                    name="Natal",
+                    lat=relocation_lat,
+                    lon=relocation_lon,
+                    utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
                 )
+                
+                # Create transit data at relocated location
+                transit_data_obj = Data(
+                    name="Transit",
+                    lat=relocation_lat,
+                    lon=relocation_lon,
+                    utc_dt=today_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
+                )
+                
+                # Calculate stats between relocated natal and relocated transits
+                stats = Stats(data1=natal_data, data2=transit_data_obj)
+                
+                # Initialize Zodiac service with relocated natal data
+                from src.services.zodiac_service import Zodiac
+                zodiac = Zodiac(natal_data)
+                
+                # Get zodiac signs from relocated natal data
+                sun_sign = zodiac.get_sun_sign()
+                moon_sign = zodiac.get_lunar_sign()
+                ascendant_sign = zodiac.get_ascendant_sign()
+                
+                # Generate full report
+                try:
+                    full_report_markdown = stats.full_report(kind="markdown")
+                    if isinstance(full_report_markdown, bytes):
+                        full_report_markdown = full_report_markdown.decode('utf-8', errors='ignore')
+                    full_report_markdown = full_report_markdown.encode('utf-8', errors='ignore').decode('utf-8')
+                except Exception as e:
+                    logger.warning(f"Failed to generate full report: {e}")
+                    full_report_markdown = "Report generation failed due to encoding issues."
+                
+                # Create the transit_data dict
+                transit_data = {
+                    "full_report": full_report_markdown,
+                    "sun_sign": sun_sign,
+                    "moon_sign": moon_sign,
+                    "rising_sign": ascendant_sign
+                }
                 
                 logger.info(f"🔄 Generated relocation transit data keys: {list(transit_data.keys())}")
                 logger.info(f"🔄 Sun sign: {transit_data.get('sun_sign')}")
