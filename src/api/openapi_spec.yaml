@@ -272,7 +272,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransitLocationResponse'
+                $ref: '#/components/schemas/TransitResponse'
         '400':
           description: Invalid MongoDB ID format
         '401':
@@ -309,7 +309,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransitRelocationResponse'
+                $ref: '#/components/schemas/TransitResponse'
         '400':
           description: Invalid MongoDB ID format
         '401':
@@ -567,36 +567,36 @@ components:
             id:
               type: string
               description: MongoDB document ID
-                         user_info:
-               type: object
-               properties:
-                 first_name:
-                   type: string
-                 last_name:
-                   type: string
-                 birth_day:
-                   type: integer
-                 birth_month:
-                   type: integer
-                 birth_year:
-                   type: integer
-                 birth_time:
-                   type: string
-                 birth_place:
-                   type: string
-                 latitude:
-                   type: number
-                 longitude:
-                   type: number
-                 timezone:
-                   type: string
-                   description: Timezone offset in +/-HH:MM format
-                 lang:
-                   type: string
-                   description: Language code (en=English, tr=Turkish)
-                 purchased:
-                   type: boolean
-                   description: Premium access status for location and relocation features
+            user_info:
+              type: object
+              properties:
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+                birth_day:
+                  type: integer
+                birth_month:
+                  type: integer
+                birth_year:
+                  type: integer
+                birth_time:
+                  type: string
+                birth_place:
+                  type: string
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+                timezone:
+                  type: string
+                  description: Timezone offset in +/-HH:MM format
+                lang:
+                  type: string
+                  description: Language code (en=English, tr=Turkish)
+                purchased:
+                  type: boolean
+                  description: Premium access status for location and relocation features
             chart_info:
               type: object
               properties:
@@ -803,7 +803,7 @@ components:
         - current_location
         - current_latitude
         - current_longitude
-       example:
+      example:
          birth_day: 1
          birth_month: 1
          birth_year: 1990
@@ -877,10 +877,10 @@ components:
         - birth_month
         - birth_year
         - birth_time
-                 - relocation_location
-         - relocation_latitude
-         - relocation_longitude
-       example:
+        - relocation_location
+        - relocation_latitude
+        - relocation_longitude
+      example:
          birth_day: 1
          birth_month: 1
          birth_year: 1990
@@ -907,7 +907,7 @@ components:
           properties:
             chart_type:
               type: string
-              enum: [classic]
+              enum: [classic, location, relocation]
               description: Chart type used
             mongo_id:
               type: string
@@ -920,53 +920,15 @@ components:
               type: string
               format: time
               description: Transit time used for calculation
-            chart_data:
-              type: object
-              description: Transit chart data with natal chart + current transits
-              properties:
-                full_report:
-                  type: string
-                  description: Full transit report
-                sun_sign:
-                  type: string
-                  description: Sun sign
-                moon_sign:
-                  type: string
-                  description: Moon sign
-                rising_sign:
-                  type: string
-                  description: Rising/Ascendant sign
-
-    TransitLocationResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [success, error]
-          description: Response status
-        data:
-          type: object
-          properties:
-            chart_type:
+            daily_record_id:
               type: string
-              enum: [location]
-              description: Chart type used
-            mongo_id:
-              type: string
-              description: MongoDB document ID
-            transit_date:
-              type: string
-              format: date
-              description: Transit date used for calculation
-            transit_time:
-              type: string
-              format: time
-              description: Transit time used for calculation
+              description: MongoDB natal_daily document ID for chart image generation
             current_location:
               type: string
-              description: Current location used
+              description: Current location used (only for location chart type)
             current_coordinates:
               type: object
+              description: Current coordinates (only for location chart type)
               properties:
                 latitude:
                   type: number
@@ -974,53 +936,12 @@ components:
                 longitude:
                   type: number
                   description: Current longitude
-            chart_data:
-              type: object
-              description: Location-based transit data with synastry effects
-              properties:
-                full_report:
-                  type: string
-                  description: Full location transit report
-                sun_sign:
-                  type: string
-                  description: Sun sign
-                moon_sign:
-                  type: string
-                  description: Moon sign
-                rising_sign:
-                  type: string
-                  description: Rising/Ascendant sign
-
-    TransitRelocationResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [success, error]
-          description: Response status
-        data:
-          type: object
-          properties:
-            chart_type:
-              type: string
-              enum: [relocation]
-              description: Chart type used
-            mongo_id:
-              type: string
-              description: MongoDB document ID
-            transit_date:
-              type: string
-              format: date
-              description: Transit date used for calculation
-            transit_time:
-              type: string
-              format: time
-              description: Transit time used for calculation
             relocation_location:
               type: string
-              description: Relocation location used
+              description: Relocation location used (only for relocation chart type)
             relocation_coordinates:
               type: object
+              description: Relocation coordinates (only for relocation chart type)
               properties:
                 latitude:
                   type: number
@@ -1030,11 +951,11 @@ components:
                   description: Relocation longitude
             chart_data:
               type: object
-              description: Relocation-based transit data with relocated chart + transits
+              description: Transit chart data with natal chart + current transits
               properties:
                 full_report:
                   type: string
-                  description: Full relocation transit report
+                  description: Full transit report
                 sun_sign:
                   type: string
                   description: Sun sign

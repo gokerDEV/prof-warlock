@@ -304,7 +304,7 @@ async def get_or_generate_transit_cache(
         location_params: Additional location parameters for premium features
         
     Returns:
-        dict: Transit chart data
+        dict: {"chart_data": transit_data, "daily_record_id": str(mongo_id)}
     """
     try:
         # Check if transit data already exists for today
@@ -319,9 +319,10 @@ async def get_or_generate_transit_cache(
         
         if existing_cache:
             logger.info(f"📊 Using cached transit data for {mongo_id} type {chart_type} on {today_date}")
-            # Return cached data (remove MongoDB _id and metadata)
+            # Return cached data with daily record ID
             chart_data = existing_cache.get("chart_data", {})
-            return chart_data
+            daily_record_id = str(existing_cache["_id"])
+            return {"chart_data": chart_data, "daily_record_id": daily_record_id}
         
         # Generate new transit data
         logger.info(f"📊 Generating new transit data for {mongo_id} type {chart_type} on {today_date}")
@@ -331,35 +332,88 @@ async def get_or_generate_transit_cache(
         
         # Generate transit data based on chart type
         if chart_type == "classic":
-            # Generate classic transit data
+            # Generate classic transit data using the same approach as daily image
             logger.info(f"🔄 Generating classic transit data for {mongo_id}")
-            logger.info(f"🔄 Birth datetime: {birth_datetime}")
-            logger.info(f"🔄 Birth place: {birth_document.get('birth_place')}")
-            logger.info(f"🔄 Latitude: {birth_document.get('latitude')}")
-            logger.info(f"🔄 Longitude: {birth_document.get('longitude')}")
-            logger.info(f"🔄 Today date: {'-'.join(today_date.split('-')[::-1])}")
-            logger.info(f"🔄 Today time: {today_time}")
-            logger.info(f"🔄 Timezone: {birth_document.get('timezone')}")
             
             try:
-                transit_data = await natal_chart_service.get_natal_stats(
-                    birth_datetime=birth_datetime,
-                    birth_place=birth_document.get("birth_place"),
-                    latitude=birth_document.get("latitude"),
-                    longitude=birth_document.get("longitude"),
-                    today_date='-'.join(today_date.split('-')[::-1]),  # Convert YYYY-MM-DD to DD-MM-YYYY
-                    today_time=today_time,
-                    timezone=birth_document.get("timezone")
+                from natal.data import Data
+                from natal.config import Config
+                from natal.stats import Stats
+                from datetime import datetime
+                
+                # Parse dates
+                birth_dt = datetime.strptime(birth_datetime, "%d-%m-%Y %H:%M")
+                today_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
+                
+                # Convert to UTC if timezone is provided
+                if birth_document.get("timezone"):
+                    from pytz import timezone
+                    tz = timezone(birth_document.get("timezone"))
+                    birth_utc_dt = tz.localize(birth_dt).astimezone(timezone('UTC')).replace(tzinfo=None)
+                    today_utc_dt = tz.localize(today_dt).astimezone(timezone('UTC')).replace(tzinfo=None)
+                else:
+                    birth_utc_dt = birth_dt
+                    today_utc_dt = today_dt
+                
+                # Get birth location coordinates
+                birth_lat = birth_document.get("latitude")
+                birth_lon = birth_document.get("longitude")
+                
+                # Create both natal and transit data at birth location for classic
+                natal_data = Data(
+                    name="Natal",
+                    lat=birth_lat,
+                    lon=birth_lon,
+                    utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
                 )
                 
-                logger.info(f"🔄 Generated transit data keys: {list(transit_data.keys())}")
+                transit_data_obj = Data(
+                    name="Transit",
+                    lat=birth_lat,
+                    lon=birth_lon,
+                    utc_dt=today_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
+                )
+                
+                # Calculate stats between birth location natal and birth location transits
+                stats = Stats(data1=natal_data, data2=transit_data_obj)
+                
+                # Initialize Zodiac service with natal data
+                from src.services.zodiac_service import Zodiac
+                zodiac = Zodiac(natal_data)
+                
+                # Get zodiac signs from natal data
+                sun_sign = zodiac.get_sun_sign()
+                moon_sign = zodiac.get_lunar_sign()
+                ascendant_sign = zodiac.get_ascendant_sign()
+                
+                # Generate full report
+                try:
+                    full_report_markdown = stats.full_report(kind="markdown")
+                    if isinstance(full_report_markdown, bytes):
+                        full_report_markdown = full_report_markdown.decode('utf-8', errors='ignore')
+                    full_report_markdown = full_report_markdown.encode('utf-8', errors='ignore').decode('utf-8')
+                except Exception as e:
+                    logger.warning(f"Failed to generate full report: {e}")
+                    full_report_markdown = "Report generation failed due to encoding issues."
+                
+                # Create the transit_data dict
+                transit_data = {
+                    "full_report": full_report_markdown,
+                    "sun_sign": sun_sign,
+                    "moon_sign": moon_sign,
+                    "rising_sign": ascendant_sign
+                }
+                
+                logger.info(f"🔄 Generated classic transit data keys: {list(transit_data.keys())}")
                 logger.info(f"🔄 Sun sign: {transit_data.get('sun_sign')}")
                 logger.info(f"🔄 Full report length: {len(transit_data.get('full_report', ''))}")
                 
             except Exception as stats_error:
-                logger.error(f"🔄 Error in get_natal_stats: {str(stats_error)}")
+                logger.error(f"🔄 Error in classic transit generation: {str(stats_error)}")
                 import traceback
-                logger.error(f"🔄 Traceback: {traceback.format_exc()}")
+                logger.error(f"🔄 Classic traceback: {traceback.format_exc()}")
                 raise stats_error
         elif chart_type == "location":
             # Generate location-based transit data using current location for transits
@@ -590,7 +644,8 @@ async def get_or_generate_transit_cache(
         insert_result = await natal_daily_collection.insert_one(cache_document)
         logger.info(f"💾 Cache insert result: {insert_result.inserted_id}")
         
-        return transit_data
+        daily_record_id = str(insert_result.inserted_id)
+        return {"chart_data": transit_data, "daily_record_id": daily_record_id}
         
     except Exception as e:
         logger.error(f"💥 Error getting/generating transit cache: {str(e)}")
@@ -599,10 +654,13 @@ async def get_or_generate_transit_cache(
         logger.error(f"💥 Traceback: {traceback.format_exc()}")
         # Return empty data on error
         return {
-            "full_report": f"Error generating {chart_type} transit data",
-            "sun_sign": "unknown",
-            "moon_sign": "unknown", 
-            "rising_sign": "unknown"
+            "chart_data": {
+                "full_report": f"Error generating {chart_type} transit data",
+                "sun_sign": "unknown",
+                "moon_sign": "unknown", 
+                "rising_sign": "unknown"
+            },
+            "daily_record_id": None
         }
 
 
@@ -1068,7 +1126,7 @@ async def get_natal_transit(
         today_date = f"{today_year}-{today_month:02d}-{today_day:02d}"
         
         # Get or generate transit data from cache
-        transit_data = await get_or_generate_transit_cache(
+        transit_result = await get_or_generate_transit_cache(
             mongo_id=mongo_id,
             chart_type="classic",
             birth_document=birth_document,
@@ -1083,7 +1141,8 @@ async def get_natal_transit(
                 "mongo_id": mongo_id,
                 "transit_date": today_date,
                 "transit_time": today_time,
-                "chart_data": transit_data
+                "chart_data": transit_result["chart_data"],
+                "daily_record_id": transit_result["daily_record_id"]
             }
         })
         
@@ -1145,7 +1204,7 @@ async def get_natal_transit_location(
         }
         
         # Get or generate transit data from cache
-        transit_data = await get_or_generate_transit_cache(
+        transit_result = await get_or_generate_transit_cache(
             mongo_id=mongo_id,
             chart_type="location",
             birth_document=birth_document,
@@ -1166,7 +1225,8 @@ async def get_natal_transit_location(
                     "latitude": request.current_latitude,
                     "longitude": request.current_longitude
                 },
-                "chart_data": transit_data
+                "chart_data": transit_result["chart_data"],
+                "daily_record_id": transit_result["daily_record_id"]
             }
         })
         
@@ -1228,7 +1288,7 @@ async def get_natal_transit_relocation(
         }
         
         # Get or generate transit data from cache
-        transit_data = await get_or_generate_transit_cache(
+        transit_result = await get_or_generate_transit_cache(
             mongo_id=mongo_id,
             chart_type="relocation",
             birth_document=birth_document,
@@ -1249,7 +1309,8 @@ async def get_natal_transit_relocation(
                     "latitude": request.relocation_latitude,
                     "longitude": request.relocation_longitude
                 },
-                "chart_data": transit_data
+                "chart_data": transit_result["chart_data"],
+                "daily_record_id": transit_result["daily_record_id"]
             }
         })
         
@@ -1360,62 +1421,140 @@ async def get_natal_daily_image(
             # For now, generate a basic chart without transit data
             transit_data = {}
         
-        # Generate chart image based on chart type
-        if chart_type == "classic":
-            # Generate classic chart
+        # Generate transit chart image based on chart type
+        try:
+            from natal.data import Data
+            from natal.chart import Chart
+            from natal.config import Config
+            from datetime import datetime
+            
+            # Parse birth date and time
+            birth_datetime = f"{natal_record['birth_day']:02d}-{natal_record['birth_month']:02d}-{natal_record['birth_year']} {natal_record['birth_time']}"
+            birth_dt = datetime.strptime(birth_datetime, "%d-%m-%Y %H:%M")
+            
+            # Parse transit date and time (default to noon for daily charts)
+            transit_date = daily_record["date"]  # YYYY-MM-DD format
+            transit_time = "12:00"  # Default time for daily charts
+            transit_dt = datetime.strptime(f"{transit_date} {transit_time}", "%Y-%m-%d %H:%M")
+            
+            # Convert to UTC if timezone is provided
+            if natal_record.get("timezone"):
+                from pytz import timezone
+                tz = timezone(natal_record.get("timezone"))
+                birth_utc_dt = tz.localize(birth_dt).astimezone(timezone('UTC')).replace(tzinfo=None)
+                transit_utc_dt = tz.localize(transit_dt).astimezone(timezone('UTC')).replace(tzinfo=None)
+            else:
+                birth_utc_dt = birth_dt
+                transit_utc_dt = transit_dt
+            
+            # Create Data objects based on chart type
+            if chart_type == "classic":
+                # Classic: both natal and transit at birth location
+                natal_data = Data(
+                    name="Natal",
+                    lat=natal_record.get("latitude"),
+                    lon=natal_record.get("longitude"),
+                    utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
+                )
+                
+                transit_data = Data(
+                    name="Transit",
+                    lat=natal_record.get("latitude"),
+                    lon=natal_record.get("longitude"),
+                    utc_dt=transit_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
+                )
+                
+            elif chart_type == "location":
+                # Location: natal at birth location, transit at current location
+                natal_data = Data(
+                    name="Natal",
+                    lat=natal_record.get("latitude"),
+                    lon=natal_record.get("longitude"),
+                    utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
+                )
+                
+                # Use current location coordinates if available
+                current_lat = location_params.get("current_latitude", natal_record.get("latitude"))
+                current_lon = location_params.get("current_longitude", natal_record.get("longitude"))
+                
+                transit_data = Data(
+                    name="Transit",
+                    lat=current_lat,
+                    lon=current_lon,
+                    utc_dt=transit_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
+                )
+                
+            elif chart_type == "relocation":
+                # Relocation: natal at relocated location, transit at relocated location
+                relocation_lat = location_params.get("relocation_latitude", natal_record.get("latitude"))
+                relocation_lon = location_params.get("relocation_longitude", natal_record.get("longitude"))
+                
+                natal_data = Data(
+                    name="Natal",
+                    lat=relocation_lat,
+                    lon=relocation_lon,
+                    utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
+                )
+                
+                transit_data = Data(
+                    name="Transit",
+                    lat=relocation_lat,
+                    lon=relocation_lon,
+                    utc_dt=transit_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                    config=Config()
+                )
+                
+            else:
+                raise ValueError(f"Unknown chart type: {chart_type}")
+            
+            # Create transit chart with both natal and transit data
+            chart = Chart(data1=natal_data, data2=transit_data, width=1600)
+            
+            # Generate SVG chart
+            chart_svg = chart.svg
+            
+            # Convert SVG to PNG
+            import cairosvg
+            chart_data_bytes = cairosvg.svg2png(
+                bytestring=chart_svg.encode('utf-8'),
+                output_width=1600,
+                output_height=int(1600 * 1.414)  # A4 aspect ratio
+            )
+            
+        except Exception as chart_error:
+            logger.error(f"💥 Error generating transit chart: {str(chart_error)}")
+            # Fallback to regular natal chart
             chart_data_bytes = natal_chart_service.generate_chart(
                 user_info, 
                 template='5', 
                 timezone=natal_record.get("timezone")
             )
-        elif chart_type == "location":
-            # For location-based charts, use current location if available
-            if location_params.get("current_latitude") and location_params.get("current_longitude"):
-                user_info_copy = user_info.copy()
-                user_info_copy["Latitude"] = location_params["current_latitude"]
-                user_info_copy["Longitude"] = location_params["current_longitude"]
-                user_info_copy["Place of Birth"] = location_params.get("current_location", user_info["Place of Birth"])
-                chart_data_bytes = natal_chart_service.generate_chart(
-                    user_info_copy, 
-                    template='5', 
-                    timezone=natal_record.get("timezone")
-                )
-            else:
-                # Fallback to classic chart if no location data
-                chart_data_bytes = natal_chart_service.generate_chart(
-                    user_info, 
-                    template='5', 
-                    timezone=natal_record.get("timezone")
-                )
-        elif chart_type == "relocation":
-            # Generate relocation-based chart
-            relocated_user_info = user_info.copy()
-            relocated_user_info["Place of Birth"] = location_params.get("relocation_location", user_info["Place of Birth"])
-            relocated_user_info["Latitude"] = location_params.get("relocation_latitude")
-            relocated_user_info["Longitude"] = location_params.get("relocation_longitude")
-            
-            chart_data_bytes = natal_chart_service.generate_chart(
-                relocated_user_info, 
-                template='5', 
-                timezone=natal_record.get("timezone")
-            )
+        
+        # For transit charts, the image is already at the correct size
+        # Only resize if it's a fallback chart from natal_chart_service
+        if chart_type in ["classic", "location", "relocation"] and "chart_error" not in locals():
+            # Transit chart is already generated at correct size
+            final_image_bytes = chart_data_bytes
         else:
-            raise ValueError(f"Unknown chart type: {chart_type}")
-        
-        # Load and resize image
-        image = Image.open(io.BytesIO(chart_data_bytes))
-        
-        # Resize to 1600px width while maintaining aspect ratio
-        target_width = 1600
-        aspect_ratio = image.height / image.width
-        target_height = int(target_width * aspect_ratio)
-        
-        resized_image = image.resize((target_width, target_height), Image.LANCZOS)
-        
-        # Save image to bytes
-        output = io.BytesIO()
-        resized_image.save(output, format='PNG')
-        final_image_bytes = output.getvalue()
+            # Load and resize image (fallback case)
+            image = Image.open(io.BytesIO(chart_data_bytes))
+            
+            # Resize to 1600px width while maintaining aspect ratio
+            target_width = 1600
+            aspect_ratio = image.height / image.width
+            target_height = int(target_width * aspect_ratio)
+            
+            resized_image = image.resize((target_width, target_height), Image.LANCZOS)
+            
+            # Save image to bytes
+            output = io.BytesIO()
+            resized_image.save(output, format='PNG')
+            final_image_bytes = output.getvalue()
         
         # Generate filename for content disposition
         filename = f"natal_daily_{chart_type}_{natal_record.get('first_name', 'chart')}_{daily_record['date']}.png"
@@ -1450,57 +1589,6 @@ async def get_natal_daily_image(
 
 
 
-
-@app.get("/debug/mongodb")
-async def debug_mongodb(api_key: str = Depends(verify_api_key)):
-    """Debug endpoint to check MongoDB connection and collections."""
-    try:
-        # Test MongoDB connection
-        admin_result = await mongodb_client.admin.command('ismaster')
-        
-        # Get collection counts
-        natal_count = await natal_collection.count_documents({})
-        daily_count = await natal_daily_collection.count_documents({})
-        
-        # Test insert and delete
-        test_doc = {
-            "natal_id": "test_id",
-            "date": "2024-01-01",
-            "created_at": datetime.now(),
-            "test": True
-        }
-        
-        insert_result = await natal_daily_collection.insert_one(test_doc)
-        inserted_id = insert_result.inserted_id
-        
-        # Verify insertion
-        found_doc = await natal_daily_collection.find_one({"_id": inserted_id})
-        
-        # Clean up test document
-        delete_result = await natal_daily_collection.delete_one({"_id": inserted_id})
-        
-        return {
-            "status": "success",
-            "mongodb_connected": True,
-            "admin_command": admin_result,
-            "collections": {
-                "natal": natal_count,
-                "natal_daily": daily_count
-            },
-            "test_insert": {
-                "inserted_id": str(inserted_id),
-                "found_doc": found_doc is not None,
-                "deleted_count": delete_result.deleted_count
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"MongoDB debug error: {str(e)}")
-        return {
-            "status": "error",
-            "error": str(e),
-            "mongodb_connected": False
-        }
 
 
 @app.get("/privacy")
