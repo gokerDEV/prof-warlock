@@ -145,4 +145,132 @@ class NatalStatsRequest(BaseModel):
                 "today_year": 2024,
                 "today_time": "15:30"
             }
+        }
+
+
+class NatalTransitRequest(BaseModel):
+    """Request model for natal transit (classic) endpoint."""
+    birth_day: int
+    birth_month: int
+    birth_year: int
+    birth_time: str  # Format: HH:MM
+    today_day: Optional[int] = None
+    today_month: Optional[int] = None
+    today_year: Optional[int] = None
+    today_time: Optional[str] = None  # Format: HH:MM
+
+    class Config:
+        """Pydantic model configuration."""
+        json_schema_extra = {
+            "example": {
+                "birth_day": 1,
+                "birth_month": 1,
+                "birth_year": 1990,
+                "birth_time": "12:00",
+                "today_day": 4,
+                "today_month": 1,
+                "today_year": 2024,
+                "today_time": "15:30"
+            }
+        }
+
+
+class NatalTransitLocationRequest(BaseModel):
+    """Request model for natal transit location (premium) endpoint."""
+    birth_day: int
+    birth_month: int
+    birth_year: int
+    birth_time: str  # Format: HH:MM
+    current_location: str
+    current_latitude: float
+    current_longitude: float
+    today_day: Optional[int] = None
+    today_month: Optional[int] = None
+    today_year: Optional[int] = None
+    today_time: Optional[str] = None  # Format: HH:MM
+
+    class Config:
+        """Pydantic model configuration."""
+        json_schema_extra = {
+            "example": {
+                "birth_day": 1,
+                "birth_month": 1,
+                "birth_year": 1990,
+                "birth_time": "12:00",
+                "current_location": "Los Angeles",
+                "current_latitude": 34.0522,
+                "current_longitude": -118.2437,
+                "today_day": 4,
+                "today_month": 1,
+                "today_year": 2024,
+                "today_time": "15:30"
+            }
+        }
+
+
+class NatalTransitRelocationRequest(BaseModel):
+    """Request model for natal transit relocation (premium) endpoint."""
+    birth_day: int
+    birth_month: int
+    birth_year: int
+    birth_time: str  # Format: HH:MM
+    relocation_location: str
+    relocation_latitude: float
+    relocation_longitude: float
+    today_day: Optional[int] = None
+    today_month: Optional[int] = None
+    today_year: Optional[int] = None
+    today_time: Optional[str] = None  # Format: HH:MM
+
+    class Config:
+        """Pydantic model configuration."""
+        json_schema_extra = {
+            "example": {
+                "birth_day": 1,
+                "birth_month": 1,
+                "birth_year": 1990,
+                "birth_time": "12:00",
+                "relocation_location": "London",
+                "relocation_latitude": 51.5074,
+                "relocation_longitude": -0.1278,
+                "today_day": 4,
+                "today_month": 1,
+                "today_year": 2024,
+                "today_time": "15:30"
+            }
+        }
+
+
+class NatalDailyImageRequest(BaseModel):
+    """Request model for natal daily image generation."""
+    birth_day: int
+    birth_month: int
+    birth_year: int
+    birth_time: str  # Format: HH:MM
+    chart_type: str  # "classic", "location", "relocation"
+    current_location: Optional[str] = None
+    current_latitude: Optional[float] = None
+    current_longitude: Optional[float] = None
+    relocation_location: Optional[str] = None
+    relocation_latitude: Optional[float] = None
+    relocation_longitude: Optional[float] = None
+    today_day: Optional[int] = None
+    today_month: Optional[int] = None
+    today_year: Optional[int] = None
+    today_time: Optional[str] = None  # Format: HH:MM
+
+    class Config:
+        """Pydantic model configuration."""
+        json_schema_extra = {
+            "example": {
+                "birth_day": 1,
+                "birth_month": 1,
+                "birth_year": 1990,
+                "birth_time": "12:00",
+                "chart_type": "classic",
+                "today_day": 4,
+                "today_month": 1,
+                "today_year": 2024,
+                "today_time": "15:30"
+            }
         } 

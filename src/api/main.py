@@ -5,7 +5,7 @@ Clean, focused API with proper error handling and security.
 """
 
 import logging
-from fastapi import FastAPI, HTTPException, Request, Query, Depends, Header, Response
+from fastapi import FastAPI, HTTPException, Query, Depends, Header, Response
 from fastapi.responses import JSONResponse
 from typing import Optional, Dict
 from datetime import datetime
@@ -14,14 +14,22 @@ from PIL import Image
 import io
 import boto3
 from hashlib import sha256
+import hashlib
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 
 from .. import __version__
 
 from ..core.configuration import config
-from ..core.domain_models import NatalChartRequest, NatalStatsRequest
-from .webhook_handler import WebhookHandler
+from ..core.domain_models import (
+    NatalChartRequest, 
+    NatalStatsRequest,
+    NatalTransitRequest,
+    NatalTransitLocationRequest,
+    NatalTransitRelocationRequest,
+    NatalDailyImageRequest
+)
+
 from ..services.natal_chart_service import NatalChartService
 
 APP_VERSION = __version__
@@ -41,7 +49,6 @@ app = FastAPI(
 )
 
 # Initialize services
-webhook_handler = WebhookHandler()
 natal_chart_service = NatalChartService()
 
 # Initialize S3 client
@@ -64,6 +71,13 @@ async def create_indexes():
     try:
         # Create compound index for natal_daily collection for fast lookups
         await natal_daily_collection.create_index([("natal_id", 1), ("date", 1)], unique=True)
+        
+        # Create new compound index for natal_daily with type field for new endpoints
+        await natal_daily_collection.create_index([("natal_id", 1), ("type", 1), ("date", 1)], unique=True)
+        
+        # Create TTL index for automatic cleanup of old cache entries (2 days)
+        await natal_daily_collection.create_index([("created_at", 1)], expireAfterSeconds=172800)  # 2 days = 172800 seconds
+        
         logger.info("📇 Created indexes for natal_daily collection")
     except Exception as e:
         logger.warning(f"Index creation warning: {e}")
@@ -75,25 +89,7 @@ async def startup_event():
     await create_indexes()
 
 
-def verify_webhook_token(token: Optional[str] = Query(None)) -> str:
-    """
-    Verify webhook authentication token.
-    
-    Args:
-        token: Token from query parameter
-        
-    Returns:
-        str: Verified token
-        
-    Raises:
-        HTTPException: If token is invalid or missing
-    """
-    if not token or token != config.security.WEBHOOK_SECRET_TOKEN:
-        raise HTTPException(
-            status_code=401,
-            detail="Unauthorized: Invalid or missing webhook token"
-        )
-    return token
+
 
 
 async def verify_api_key(x_api_key: str = Header(..., alias="X-Api-Key")) -> str:
@@ -225,6 +221,190 @@ async def get_or_generate_daily_stats(
         }
 
 
+async def validate_birth_info(mongo_id: str, birth_day: int, birth_month: int, birth_year: int, birth_time: str) -> dict:
+    """
+    Validate birth information against stored data for security.
+    
+    Args:
+        mongo_id: MongoDB document ID
+        birth_day, birth_month, birth_year: Birth date components
+        birth_time: Birth time in HH:MM format
+        
+    Returns:
+        dict: Natal chart document if valid
+        
+    Raises:
+        HTTPException: If validation fails
+    """
+    # Validate MongoDB ID format
+    if not ObjectId.is_valid(mongo_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid MongoDB ID format"
+        )
+    
+    # Query MongoDB with ID and birth information for security
+    query = {
+        "_id": ObjectId(mongo_id),
+        "birth_day": birth_day,
+        "birth_month": birth_month,
+        "birth_year": birth_year,
+        "birth_time": birth_time
+    }
+    
+    document = await natal_collection.find_one(query)
+    
+    if not document:
+        raise HTTPException(
+            status_code=403,
+            detail="Birth information doesn't match or natal chart not found"
+        )
+    
+    return document
+
+
+async def check_premium_access(document: dict) -> bool:
+    """
+    Check if user has premium access.
+    
+    Args:
+        document: Natal chart document from MongoDB
+        
+    Returns:
+        bool: True if user has premium access
+        
+    Raises:
+        HTTPException: If premium access is required but not available
+    """
+    purchased = document.get("purchased", False)
+    
+    if not purchased:
+        raise HTTPException(
+            status_code=402,
+            detail="Premium access required for this feature"
+        )
+    
+    return True
+
+
+async def get_or_generate_transit_cache(
+    mongo_id: str,
+    chart_type: str,
+    birth_document: dict,
+    today_date: str,
+    today_time: str,
+    location_params: dict = None
+) -> dict:
+    """
+    Get transit data from cache or generate new ones.
+    
+    Args:
+        mongo_id: MongoDB natal chart document ID
+        chart_type: Type of chart ("classic", "location", "relocation")
+        birth_document: Birth information document
+        today_date: Today's date in YYYY-MM-DD format
+        today_time: Today's time in HH:MM format
+        location_params: Additional location parameters for premium features
+        
+    Returns:
+        dict: Transit chart data
+    """
+    try:
+        # Check if transit data already exists for today
+        cache_query = {
+            "natal_id": mongo_id,
+            "type": chart_type,
+            "date": today_date
+        }
+        
+        logger.info(f"🔍 Checking transit cache for {mongo_id} type {chart_type} on {today_date}")
+        existing_cache = await natal_daily_collection.find_one(cache_query)
+        
+        if existing_cache:
+            logger.info(f"📊 Using cached transit data for {mongo_id} type {chart_type} on {today_date}")
+            # Return cached data (remove MongoDB _id and metadata)
+            chart_data = existing_cache.get("chart_data", {})
+            return chart_data
+        
+        # Generate new transit data
+        logger.info(f"📊 Generating new transit data for {mongo_id} type {chart_type} on {today_date}")
+        
+        # Prepare birth datetime
+        birth_datetime = f"{birth_document['birth_day']:02d}-{birth_document['birth_month']:02d}-{birth_document['birth_year']} {birth_document['birth_time']}"
+        
+        # Generate transit data based on chart type
+        if chart_type == "classic":
+            # Generate classic transit data
+            transit_data = await natal_chart_service.get_natal_stats(
+                birth_datetime=birth_datetime,
+                birth_place=birth_document.get("birth_place"),
+                latitude=birth_document.get("latitude"),
+                longitude=birth_document.get("longitude"),
+                today_date=today_date.replace("-", "-"),  # Convert to DD-MM-YYYY
+                today_time=today_time,
+                timezone=birth_document.get("timezone")
+            )
+        elif chart_type == "location":
+            # Generate location-based transit data (synastry with current location)
+            transit_data = await natal_chart_service.get_natal_stats(
+                birth_datetime=birth_datetime,
+                birth_place=birth_document.get("birth_place"),
+                latitude=birth_document.get("latitude"),
+                longitude=birth_document.get("longitude"),
+                today_date=today_date.replace("-", "-"),  # Convert to DD-MM-YYYY
+                today_time=today_time,
+                timezone=birth_document.get("timezone"),
+                current_location=location_params.get("current_location"),
+                current_latitude=location_params.get("current_latitude"),
+                current_longitude=location_params.get("current_longitude")
+            )
+        elif chart_type == "relocation":
+            # Generate relocation-based transit data
+            transit_data = await natal_chart_service.get_natal_stats(
+                birth_datetime=birth_datetime,
+                birth_place=location_params.get("relocation_location"),
+                latitude=location_params.get("relocation_latitude"),
+                longitude=location_params.get("relocation_longitude"),
+                today_date=today_date.replace("-", "-"),  # Convert to DD-MM-YYYY
+                today_time=today_time,
+                timezone=birth_document.get("timezone")
+            )
+        else:
+            raise ValueError(f"Unknown chart type: {chart_type}")
+        
+        # Cache the transit data
+        cache_document = {
+            "natal_id": mongo_id,
+            "type": chart_type,
+            "date": today_date,
+            "chart_data": transit_data,
+            "created_at": datetime.now()
+        }
+        
+        # Add location parameters to cache if provided
+        if location_params:
+            cache_document["location_params"] = location_params
+        
+        logger.info(f"💾 Caching transit data for {mongo_id} type {chart_type} on {today_date}")
+        insert_result = await natal_daily_collection.insert_one(cache_document)
+        logger.info(f"💾 Cache insert result: {insert_result.inserted_id}")
+        
+        return transit_data
+        
+    except Exception as e:
+        logger.error(f"💥 Error getting/generating transit cache: {str(e)}")
+        logger.error(f"💥 Exception type: {type(e)}")
+        import traceback
+        logger.error(f"💥 Traceback: {traceback.format_exc()}")
+        # Return empty data on error
+        return {
+            "full_report": f"Error generating {chart_type} transit data",
+            "sun_sign": "unknown",
+            "moon_sign": "unknown", 
+            "rising_sign": "unknown"
+        }
+
+
 @app.get("/")
 async def health_check():
     """Basic health check endpoint."""
@@ -235,86 +415,10 @@ async def health_check():
     }
 
 
-@app.get("/health")
-async def detailed_health_check():
-    """Detailed health check with system information."""
-    try:
-        # Test MongoDB connection
-        await mongodb_client.admin.command('ismaster')
-        mongodb_status = "connected"
-        
-        # Get collection counts
-        natal_count = await natal_collection.count_documents({})
-        daily_count = await natal_daily_collection.count_documents({})
-        
-    except Exception as e:
-        logger.error(f"MongoDB connection error: {str(e)}")
-        mongodb_status = "disconnected"
-        natal_count = 0
-        daily_count = 0
-    
-    return {
-        "status": "healthy",
-        "service": "Prof. Warlock",
-        "version": APP_VERSION,
-        "features": [
-            "email_parsing",
-            "image_processing",
-            "personalized_responses",
-            "mongodb_storage",
-            "daily_stats_caching"
-        ],
-        "database": {
-            "mongodb": mongodb_status,
-            "natal_charts": natal_count,
-            "daily_stats": daily_count
-        }
-    }
 
 
-@app.post("/webhook")
-async def process_email_webhook(
-    request: Request,
-    token: str = Depends(verify_webhook_token)
-):
-    """
-    Process incoming email webhooks from Postmark.
-    
-    Complete Email-to-AI-to-Email Workflow:
-    1. Security validation (webhook token)
-    2. Email parsing and cleaning
-    3. PING/PONG health check handling
-    4. Natal chart generation    
-    5. Personalized email response
-    
-    Security: Requires valid token parameter for authentication.
-    Usage: POST /webhook?token=your-secret-token
-    """
-    try:
-        # Parse webhook data
-        webhook_data = await request.json()
-        logger.info(f"📧 Received webhook from: {webhook_data.get('From', 'unknown')}")
-        
-        # Process through webhook handler
-        result = await webhook_handler.process_webhook(webhook_data)
-        
-        # Return appropriate response
-        if result["status"] == "success":
-            return JSONResponse(content=result, status_code=200)
-        elif result["status"] == "partial_success":
-            return JSONResponse(content=result, status_code=202)  # Accepted
-        else:
-            return JSONResponse(content=result, status_code=500)
-            
-    except Exception as e:
-        logger.error(f"💥 Webhook endpoint error: {str(e)}")
-        return JSONResponse(
-            content={
-                "status": "error",
-                "message": f"Webhook processing failed: {str(e)}"
-            },
-            status_code=500
-        )
+
+
 
 
 @app.post("/natal-chart")
@@ -415,6 +519,7 @@ async def generate_natal_chart_image(
             "longitude": request.longitude,
             "timezone": request.timezone,
             "lang": request.lang or "en",
+            "purchased": False,  # Default to free tier
             "created_at": datetime.now(),
             "status": "generating"
         }
@@ -682,6 +787,420 @@ async def get_natal_stats(
         )
 
 
+@app.post("/natal-transit/{mongo_id}")
+async def get_natal_transit(
+    mongo_id: str,
+    request: NatalTransitRequest,
+    api_key: str = Depends(verify_api_key)
+) -> JSONResponse:
+    """
+    Get natal transit data (classic, free endpoint).
+    
+    Args:
+        mongo_id: MongoDB document ID
+        request: Birth information for validation
+        api_key: API key for authentication
+        
+    Returns:
+        JSONResponse: Classic transit data with natal chart + current transits
+    """
+    try:
+        # Validate birth information
+        birth_document = await validate_birth_info(
+            mongo_id=mongo_id,
+            birth_day=request.birth_day,
+            birth_month=request.birth_month,
+            birth_year=request.birth_year,
+            birth_time=request.birth_time
+        )
+        
+        # Set default values for today if not provided
+        today = datetime.now()
+        today_day = request.today_day or today.day
+        today_month = request.today_month or today.month
+        today_year = request.today_year or today.year
+        today_time = request.today_time or today.strftime("%H:%M")
+        
+        # Format dates for processing
+        today_date = f"{today_year}-{today_month:02d}-{today_day:02d}"
+        
+        # Get or generate transit data from cache
+        transit_data = await get_or_generate_transit_cache(
+            mongo_id=mongo_id,
+            chart_type="classic",
+            birth_document=birth_document,
+            today_date=today_date,
+            today_time=today_time
+        )
+        
+        return JSONResponse(content={
+            "status": "success",
+            "data": {
+                "chart_type": "classic",
+                "mongo_id": mongo_id,
+                "transit_date": today_date,
+                "transit_time": today_time,
+                "chart_data": transit_data
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Error in natal transit endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get natal transit data: {str(e)}"
+        )
+
+
+@app.post("/natal-transit-location/{mongo_id}")
+async def get_natal_transit_location(
+    mongo_id: str,
+    request: NatalTransitLocationRequest,
+    api_key: str = Depends(verify_api_key)
+) -> JSONResponse:
+    """
+    Get natal transit location data (premium endpoint).
+    
+    Args:
+        mongo_id: MongoDB document ID
+        request: Birth information and current location for validation
+        api_key: API key for authentication
+        
+    Returns:
+        JSONResponse: Location-based transit data with synastry effects
+    """
+    try:
+        # Validate birth information
+        birth_document = await validate_birth_info(
+            mongo_id=mongo_id,
+            birth_day=request.birth_day,
+            birth_month=request.birth_month,
+            birth_year=request.birth_year,
+            birth_time=request.birth_time
+        )
+        
+        # Check premium access
+        await check_premium_access(birth_document)
+        
+        # Set default values for today if not provided
+        today = datetime.now()
+        today_day = request.today_day or today.day
+        today_month = request.today_month or today.month
+        today_year = request.today_year or today.year
+        today_time = request.today_time or today.strftime("%H:%M")
+        
+        # Format dates for processing
+        today_date = f"{today_year}-{today_month:02d}-{today_day:02d}"
+        
+        # Prepare location parameters
+        location_params = {
+            "current_location": request.current_location,
+            "current_latitude": request.current_latitude,
+            "current_longitude": request.current_longitude
+        }
+        
+        # Get or generate transit data from cache
+        transit_data = await get_or_generate_transit_cache(
+            mongo_id=mongo_id,
+            chart_type="location",
+            birth_document=birth_document,
+            today_date=today_date,
+            today_time=today_time,
+            location_params=location_params
+        )
+        
+        return JSONResponse(content={
+            "status": "success",
+            "data": {
+                "chart_type": "location",
+                "mongo_id": mongo_id,
+                "transit_date": today_date,
+                "transit_time": today_time,
+                "current_location": request.current_location,
+                "current_coordinates": {
+                    "latitude": request.current_latitude,
+                    "longitude": request.current_longitude
+                },
+                "chart_data": transit_data
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Error in natal transit location endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get natal transit location data: {str(e)}"
+        )
+
+
+@app.post("/natal-transit-relocation/{mongo_id}")
+async def get_natal_transit_relocation(
+    mongo_id: str,
+    request: NatalTransitRelocationRequest,
+    api_key: str = Depends(verify_api_key)
+) -> JSONResponse:
+    """
+    Get natal transit relocation data (premium endpoint).
+    
+    Args:
+        mongo_id: MongoDB document ID
+        request: Birth information and relocation details
+        api_key: API key for authentication
+        
+    Returns:
+        JSONResponse: Relocation-based transit data with relocated chart + transits
+    """
+    try:
+        # Validate birth information
+        birth_document = await validate_birth_info(
+            mongo_id=mongo_id,
+            birth_day=request.birth_day,
+            birth_month=request.birth_month,
+            birth_year=request.birth_year,
+            birth_time=request.birth_time
+        )
+        
+        # Check premium access
+        await check_premium_access(birth_document)
+        
+        # Set default values for today if not provided
+        today = datetime.now()
+        today_day = request.today_day or today.day
+        today_month = request.today_month or today.month
+        today_year = request.today_year or today.year
+        today_time = request.today_time or today.strftime("%H:%M")
+        
+        # Format dates for processing
+        today_date = f"{today_year}-{today_month:02d}-{today_day:02d}"
+        
+        # Prepare location parameters
+        location_params = {
+            "relocation_location": request.relocation_location,
+            "relocation_latitude": request.relocation_latitude,
+            "relocation_longitude": request.relocation_longitude
+        }
+        
+        # Get or generate transit data from cache
+        transit_data = await get_or_generate_transit_cache(
+            mongo_id=mongo_id,
+            chart_type="relocation",
+            birth_document=birth_document,
+            today_date=today_date,
+            today_time=today_time,
+            location_params=location_params
+        )
+        
+        return JSONResponse(content={
+            "status": "success",
+            "data": {
+                "chart_type": "relocation",
+                "mongo_id": mongo_id,
+                "transit_date": today_date,
+                "transit_time": today_time,
+                "relocation_location": request.relocation_location,
+                "relocation_coordinates": {
+                    "latitude": request.relocation_latitude,
+                    "longitude": request.relocation_longitude
+                },
+                "chart_data": transit_data
+            }
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Error in natal transit relocation endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get natal transit relocation data: {str(e)}"
+        )
+
+
+@app.post("/natal-daily-image/{mongo_id}")
+async def generate_natal_daily_image(
+    mongo_id: str,
+    request: NatalDailyImageRequest,
+    api_key: str = Depends(verify_api_key),
+    if_none_match: Optional[str] = Header(None, alias="If-None-Match")
+) -> Response:
+    """
+    Generate daily natal chart image on-the-fly with ETag caching.
+    
+    Args:
+        mongo_id: MongoDB document ID
+        request: Birth information and chart parameters
+        api_key: API key for authentication
+        if_none_match: ETag header for cache validation
+        
+    Returns:
+        Response: Generated natal chart image as PNG with caching headers
+    """
+    try:
+        # Validate birth information
+        birth_document = await validate_birth_info(
+            mongo_id=mongo_id,
+            birth_day=request.birth_day,
+            birth_month=request.birth_month,
+            birth_year=request.birth_year,
+            birth_time=request.birth_time
+        )
+        
+        # Check premium access for premium chart types
+        if request.chart_type in ["location", "relocation"]:
+            await check_premium_access(birth_document)
+        
+        # Set default values for today if not provided
+        today = datetime.now()
+        today_day = request.today_day or today.day
+        today_month = request.today_month or today.month
+        today_year = request.today_year or today.year
+        today_time = request.today_time or today.strftime("%H:%M")
+        
+        # Format dates for processing
+        today_date = f"{today_year}-{today_month:02d}-{today_day:02d}"
+        
+        # Generate ETag based on request parameters
+        etag_data = f"{mongo_id}_{today_date}_{request.chart_type}"
+        if request.chart_type == "location":
+            etag_data += f"_{request.current_latitude}_{request.current_longitude}"
+        elif request.chart_type == "relocation":
+            etag_data += f"_{request.relocation_latitude}_{request.relocation_longitude}"
+        
+        etag = hashlib.md5(etag_data.encode()).hexdigest()
+        
+        # Check if client has cached version
+        if if_none_match == etag:
+            return Response(
+                status_code=304,
+                headers={
+                    "ETag": etag,
+                    "Cache-Control": "public, max-age=86400"
+                }
+            )
+        
+        # Prepare location parameters based on chart type
+        location_params = None
+        if request.chart_type == "location":
+            location_params = {
+                "current_location": request.current_location,
+                "current_latitude": request.current_latitude,
+                "current_longitude": request.current_longitude
+            }
+        elif request.chart_type == "relocation":
+            location_params = {
+                "relocation_location": request.relocation_location,
+                "relocation_latitude": request.relocation_latitude,
+                "relocation_longitude": request.relocation_longitude
+            }
+        
+        # Get or generate transit data from cache
+        transit_data = await get_or_generate_transit_cache(
+            mongo_id=mongo_id,
+            chart_type=request.chart_type,
+            birth_document=birth_document,
+            today_date=today_date,
+            today_time=today_time,
+            location_params=location_params
+        )
+        
+        # Prepare user info for chart generation
+        user_info = {
+            "First Name": birth_document.get("first_name", ""),
+            "Last Name": birth_document.get("last_name", ""),
+            "Date of Birth": f"{birth_document['birth_day']:02d}-{birth_document['birth_month']:02d}-{birth_document['birth_year']} {birth_document['birth_time']}",
+            "Place of Birth": birth_document.get("birth_place", ""),
+            "Latitude": birth_document.get("latitude"),
+            "Longitude": birth_document.get("longitude")
+        }
+        
+        # Generate chart image based on chart type
+        if request.chart_type == "classic":
+            # Generate classic chart with transits
+            chart_data_bytes = natal_chart_service.generate_chart(
+                user_info, 
+                template='5', 
+                timezone=birth_document.get("timezone"),
+                transit_data=transit_data
+            )
+        elif request.chart_type == "location":
+            # Generate location-based chart
+            chart_data_bytes = natal_chart_service.generate_chart(
+                user_info, 
+                template='5', 
+                timezone=birth_document.get("timezone"),
+                transit_data=transit_data,
+                current_location=request.current_location,
+                current_latitude=request.current_latitude,
+                current_longitude=request.current_longitude
+            )
+        elif request.chart_type == "relocation":
+            # Generate relocation-based chart
+            relocated_user_info = user_info.copy()
+            relocated_user_info["Place of Birth"] = request.relocation_location
+            relocated_user_info["Latitude"] = request.relocation_latitude
+            relocated_user_info["Longitude"] = request.relocation_longitude
+            
+            chart_data_bytes = natal_chart_service.generate_chart(
+                relocated_user_info, 
+                template='5', 
+                timezone=birth_document.get("timezone"),
+                transit_data=transit_data
+            )
+        else:
+            raise ValueError(f"Unknown chart type: {request.chart_type}")
+        
+        # Load and resize image
+        image = Image.open(io.BytesIO(chart_data_bytes))
+        
+        # Resize to 1600px width while maintaining aspect ratio
+        target_width = 1600
+        aspect_ratio = image.height / image.width
+        target_height = int(target_width * aspect_ratio)
+        
+        resized_image = image.resize((target_width, target_height), Image.LANCZOS)
+        
+        # Save image to bytes
+        output = io.BytesIO()
+        resized_image.save(output, format='PNG')
+        final_image_bytes = output.getvalue()
+        
+        # Generate filename for content disposition
+        filename = f"natal_daily_{request.chart_type}_{birth_document.get('first_name', 'chart')}_{today_date}.png"
+        
+        # Return image with caching headers
+        return Response(
+            content=final_image_bytes,
+            media_type="image/png",
+            headers={
+                "Content-Type": "image/png",
+                "Content-Disposition": f'inline; filename="{filename}"',
+                "ETag": etag,
+                "Cache-Control": "public, max-age=86400",  # 24 hours
+                "X-Chart-Type": request.chart_type,
+                "X-Mongo-ID": mongo_id,
+                "X-Transit-Date": today_date
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"💥 Error generating natal daily image: {str(e)}")
+        import traceback
+        logger.error(f"💥 Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate natal daily image: {str(e)}"
+        )
+
+
+
+
+
 @app.get("/debug/mongodb")
 async def debug_mongodb(api_key: str = Depends(verify_api_key)):
     """Debug endpoint to check MongoDB connection and collections."""
@@ -735,9 +1254,30 @@ async def debug_mongodb(api_key: str = Depends(verify_api_key)):
 
 
 @app.get("/privacy")
-async def privacy_policy():
-    """Endpoint to provide information about data privacy."""
-    return "This system does not store any data. It processes the provided information to generate insights and returns the results without retaining any data."
+async def privacy_policy(lang: str = Query("en", description="Language code (en=English, tr=Turkish)")):
+    """Endpoint to provide information about data privacy in multiple languages."""
+    
+    # Validate language parameter
+    if lang not in ["en", "tr"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid language parameter. Supported languages: en, tr"
+        )
+    
+    privacy_texts = {
+        "en": (
+            "When you receive a natal chart poster from goker.art/natal, a record is created in the system "
+            "and Astera AI securely processes the information (if any) by matching it with goker.art/natal services. "
+            "No record is created for non-matching data."
+        ),
+        "tr": (
+            "goker.art/natal tarafından sunulan natal chart posteri aldığınız zaman sisteme kaydınız oluşur ve "
+            "Astera AI secure şekilde sizden aldığı bilgileri (eğer varsa) goker.art/natal servisleri ile "
+            "eşleştirerek işler. Eşleşmeyen veriler için kayıt işlemi yapılmaz."
+        )
+    }
+    
+    return privacy_texts[lang]
 
 
 @app.exception_handler(Exception)

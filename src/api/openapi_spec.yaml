@@ -1,7 +1,26 @@
 openapi: 3.1.0
 info:
   title: Prof. Warlock API
-  description: API for generating natal charts and stats with MongoDB storage
+  description: |
+    API for generating natal charts and stats with MongoDB storage.
+    
+    Features:
+    - Natal chart generation with S3 storage
+    - Daily transit calculations with caching
+    - Premium features (location and relocation charts)
+    - Image generation with ETag caching
+    - Birth data validation and security
+    - Multi-language privacy policy
+    
+    Premium Features:
+    - Location-based synastry charts
+    - Relocation charts with transits
+    - Advanced transit calculations
+    
+    Caching:
+    - Daily stats cached for 2 days
+    - ETag-based image caching
+    - Optimized performance with TTL indexes
   version: 1.0.0
 paths:
   /:
@@ -23,69 +42,8 @@ paths:
                   version:
                     type: string
 
-  /health:
-    get:
-      summary: Detailed health check with system information
-      operationId: detailedHealthCheck
-      responses:
-        '200':
-          description: Detailed health status
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  service:
-                    type: string
-                  version:
-                    type: string
-                  features:
-                    type: array
-                    items:
-                      type: string
-                  database:
-                    type: object
-                    properties:
-                      mongodb:
-                        type: string
+  
 
-  /webhook:
-    post:
-      summary: Process incoming email webhooks from Postmark
-      operationId: processEmailWebhook
-      parameters:
-        - name: token
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Webhook authentication token
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              description: Postmark webhook data
-      responses:
-        '200':
-          description: Webhook processed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WebhookResponse'
-        '202':
-          description: Webhook accepted (partial success)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WebhookResponse'
-        '401':
-          description: Unauthorized - Invalid webhook token
-        '500':
-          description: Internal server error
 
   /natal-chart:
     post:
@@ -241,17 +199,215 @@ paths:
         '500':
           description: Internal server error
 
-  /privacy:
-    get:
-      summary: Privacy policy endpoint
-      operationId: getPrivacyPolicy
+  /natal-transit/{mongo_id}:
+    post:
+      summary: Get natal transit data (classic, free endpoint)
+      operationId: getNatalTransit
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: mongo_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MongoDB document ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NatalTransitRequest'
       responses:
         '200':
-          description: Privacy policy information
+          description: Classic transit data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitResponse'
+        '400':
+          description: Invalid MongoDB ID format
+        '401':
+          description: Unauthorized
+        '403':
+          description: Birth information doesn't match
+        '500':
+          description: Internal server error
+
+  /natal-transit-location/{mongo_id}:
+    post:
+      summary: Get natal transit location data (premium endpoint)
+      operationId: getNatalTransitLocation
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: mongo_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MongoDB document ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NatalTransitLocationRequest'
+      responses:
+        '200':
+          description: Location-based transit data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitLocationResponse'
+        '400':
+          description: Invalid MongoDB ID format
+        '401':
+          description: Unauthorized
+        '402':
+          description: Payment Required - Premium access required
+        '403':
+          description: Birth information doesn't match
+        '500':
+          description: Internal server error
+
+  /natal-transit-relocation/{mongo_id}:
+    post:
+      summary: Get natal transit relocation data (premium endpoint)
+      operationId: getNatalTransitRelocation
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: mongo_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MongoDB document ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NatalTransitRelocationRequest'
+      responses:
+        '200':
+          description: Relocation-based transit data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransitRelocationResponse'
+        '400':
+          description: Invalid MongoDB ID format
+        '401':
+          description: Unauthorized
+        '402':
+          description: Payment Required - Premium access required
+        '403':
+          description: Birth information doesn't match
+        '500':
+          description: Internal server error
+
+  /natal-daily-image/{mongo_id}:
+    post:
+      summary: Generate daily natal chart image on-the-fly with ETag caching
+      operationId: generateNatalDailyImage
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: mongo_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: MongoDB document ID
+        - name: If-None-Match
+          in: header
+          required: false
+          schema:
+            type: string
+          description: ETag header for cache validation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NatalDailyImageRequest'
+      responses:
+        '200':
+          description: Daily natal chart image generated successfully
+          headers:
+            ETag:
+              description: ETag for caching
+              schema:
+                type: string
+            Cache-Control:
+              description: Cache control directive
+              schema:
+                type: string
+            X-Chart-Type:
+              description: Chart type used
+              schema:
+                type: string
+            X-Mongo-ID:
+              description: MongoDB document ID
+              schema:
+                type: string
+            X-Transit-Date:
+              description: Transit date used for calculation
+              schema:
+                type: string
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: Not Modified - Use cached version
+          headers:
+            ETag:
+              description: ETag for caching
+              schema:
+                type: string
+            Cache-Control:
+              description: Cache control directive
+              schema:
+                type: string
+        '400':
+          description: Invalid MongoDB ID format
+        '401':
+          description: Unauthorized
+        '402':
+          description: Payment Required - Premium access required for location/relocation types
+        '403':
+          description: Birth information doesn't match
+        '500':
+          description: Internal server error
+
+
+
+  /privacy:
+    get:
+      summary: Privacy policy endpoint with language support
+      operationId: getPrivacyPolicy
+      parameters:
+        - name: lang
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [en, tr]
+            default: en
+          description: Language code for privacy policy (en=English, tr=Turkish)
+      responses:
+        '200':
+          description: Privacy policy information in requested language
           content:
             text/plain:
               schema:
                 type: string
+        '400':
+          description: Invalid language parameter
 
 components:
   securitySchemes:
@@ -387,19 +543,7 @@ components:
         - birth_year
         - birth_time
 
-    WebhookResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [success, partial_success, error]
-          description: Processing status
-        message:
-          type: string
-          description: Response message
-        details:
-          type: object
-          description: Additional details
+
 
     NatalChartResponse:
       type: object
@@ -441,6 +585,9 @@ components:
                  lang:
                    type: string
                    description: Language code (en=English, tr=Turkish)
+                 purchased:
+                   type: boolean
+                   description: Premium access status for location and relocation features
             chart_info:
               type: object
               properties:
@@ -459,7 +606,7 @@ components:
                   description: Chart generation status
             stats:
               type: object
-              description: Daily natal stats generated on-demand with transit information for today
+              description: Daily natal stats generated on-demand with transit information for today (cached for performance)
               properties:
                 full_report:
                   type: string
@@ -483,4 +630,445 @@ components:
                 updated_at:
                   type: string
                   format: date-time
-                  description: Last update timestamp 
+                  description: Last update timestamp
+
+    NatalTransitRequest:
+      type: object
+      properties:
+        birth_day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Birth day (1-31)
+        birth_month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Birth month (1-12)
+        birth_year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Birth year
+        birth_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+          description: Birth time in HH:MM format
+        today_day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Today's day (1-31), optional
+        today_month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Today's month (1-12), optional
+        today_year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Today's year, optional
+        today_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+          description: Today's time in HH:MM format, optional
+      required:
+        - birth_day
+        - birth_month
+        - birth_year
+        - birth_time
+
+    NatalTransitLocationRequest:
+      type: object
+      properties:
+        birth_day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Birth day (1-31)
+        birth_month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Birth month (1-12)
+        birth_year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Birth year
+        birth_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+          description: Birth time in HH:MM format
+        current_location:
+          type: string
+          description: Current location name
+        current_latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          description: Current latitude coordinate
+        current_longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          description: Current longitude coordinate
+        today_day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Today's day (1-31), optional
+        today_month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Today's month (1-12), optional
+        today_year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Today's year, optional
+        today_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+          description: Today's time in HH:MM format, optional
+      required:
+        - birth_day
+        - birth_month
+        - birth_year
+        - birth_time
+        - current_location
+        - current_latitude
+        - current_longitude
+       example:
+         birth_day: 1
+         birth_month: 1
+         birth_year: 1990
+         birth_time: "12:00"
+         current_location: "Los Angeles"
+         current_latitude: 34.0522
+         current_longitude: -118.2437
+         today_day: 4
+         today_month: 1
+         today_year: 2024
+         today_time: "15:30"
+
+    NatalTransitRelocationRequest:
+      type: object
+      properties:
+        birth_day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Birth day (1-31)
+        birth_month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Birth month (1-12)
+        birth_year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Birth year
+        birth_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+          description: Birth time in HH:MM format
+        relocation_location:
+          type: string
+          description: Relocation location name
+        relocation_latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          description: Relocation latitude coordinate
+        relocation_longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          description: Relocation longitude coordinate
+        today_day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Today's day (1-31), optional
+        today_month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Today's month (1-12), optional
+        today_year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Today's year, optional
+        today_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+          description: Today's time in HH:MM format, optional
+      required:
+        - birth_day
+        - birth_month
+        - birth_year
+        - birth_time
+                 - relocation_location
+         - relocation_latitude
+         - relocation_longitude
+       example:
+         birth_day: 1
+         birth_month: 1
+         birth_year: 1990
+         birth_time: "12:00"
+         relocation_location: "London"
+         relocation_latitude: 51.5074
+         relocation_longitude: -0.1278
+         today_day: 4
+         today_month: 1
+         today_year: 2024
+         today_time: "15:30"
+
+    NatalDailyImageRequest:
+      type: object
+      properties:
+        birth_day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Birth day (1-31)
+        birth_month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Birth month (1-12)
+        birth_year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Birth year
+        birth_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+          description: Birth time in HH:MM format
+        chart_type:
+          type: string
+          enum: [classic, location, relocation]
+          description: Chart type to generate
+        current_location:
+          type: string
+          description: Current location name (required for location type)
+        current_latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          description: Current latitude coordinate (required for location type)
+        current_longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          description: Current longitude coordinate (required for location type)
+        relocation_location:
+          type: string
+          description: Relocation location name (required for relocation type)
+        relocation_latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+          description: Relocation latitude coordinate (required for relocation type)
+        relocation_longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+          description: Relocation longitude coordinate (required for relocation type)
+        today_day:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Today's day (1-31), optional
+        today_month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Today's month (1-12), optional
+        today_year:
+          type: integer
+          minimum: 1900
+          maximum: 2100
+          description: Today's year, optional
+        today_time:
+          type: string
+          format: time
+          pattern: '^\d{2}:\d{2}$'
+          description: Today's time in HH:MM format, optional
+      required:
+        - birth_day
+        - birth_month
+        - birth_year
+        - birth_time
+        - chart_type
+      example:
+        birth_day: 1
+        birth_month: 1
+        birth_year: 1990
+        birth_time: "12:00"
+        chart_type: "classic"
+
+    TransitResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          description: Response status
+        data:
+          type: object
+          properties:
+            chart_type:
+              type: string
+              enum: [classic]
+              description: Chart type used
+            mongo_id:
+              type: string
+              description: MongoDB document ID
+            transit_date:
+              type: string
+              format: date
+              description: Transit date used for calculation
+            transit_time:
+              type: string
+              format: time
+              description: Transit time used for calculation
+            chart_data:
+              type: object
+              description: Transit chart data with natal chart + current transits
+              properties:
+                full_report:
+                  type: string
+                  description: Full transit report
+                sun_sign:
+                  type: string
+                  description: Sun sign
+                moon_sign:
+                  type: string
+                  description: Moon sign
+                rising_sign:
+                  type: string
+                  description: Rising/Ascendant sign
+
+    TransitLocationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          description: Response status
+        data:
+          type: object
+          properties:
+            chart_type:
+              type: string
+              enum: [location]
+              description: Chart type used
+            mongo_id:
+              type: string
+              description: MongoDB document ID
+            transit_date:
+              type: string
+              format: date
+              description: Transit date used for calculation
+            transit_time:
+              type: string
+              format: time
+              description: Transit time used for calculation
+            current_location:
+              type: string
+              description: Current location used
+            current_coordinates:
+              type: object
+              properties:
+                latitude:
+                  type: number
+                  description: Current latitude
+                longitude:
+                  type: number
+                  description: Current longitude
+            chart_data:
+              type: object
+              description: Location-based transit data with synastry effects
+              properties:
+                full_report:
+                  type: string
+                  description: Full location transit report
+                sun_sign:
+                  type: string
+                  description: Sun sign
+                moon_sign:
+                  type: string
+                  description: Moon sign
+                rising_sign:
+                  type: string
+                  description: Rising/Ascendant sign
+
+    TransitRelocationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          description: Response status
+        data:
+          type: object
+          properties:
+            chart_type:
+              type: string
+              enum: [relocation]
+              description: Chart type used
+            mongo_id:
+              type: string
+              description: MongoDB document ID
+            transit_date:
+              type: string
+              format: date
+              description: Transit date used for calculation
+            transit_time:
+              type: string
+              format: time
+              description: Transit time used for calculation
+            relocation_location:
+              type: string
+              description: Relocation location used
+            relocation_coordinates:
+              type: object
+              properties:
+                latitude:
+                  type: number
+                  description: Relocation latitude
+                longitude:
+                  type: number
+                  description: Relocation longitude
+            chart_data:
+              type: object
+              description: Relocation-based transit data with relocated chart + transits
+              properties:
+                full_report:
+                  type: string
+                  description: Full relocation transit report
+                sun_sign:
+                  type: string
+                  description: Sun sign
+                moon_sign:
+                  type: string
+                  description: Moon sign
+                rising_sign:
+                  type: string
+                  description: Rising/Ascendant sign
+
+ 
