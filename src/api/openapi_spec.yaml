@@ -322,9 +322,9 @@ paths:
           description: Internal server error
 
   /natal-daily-image/{mongo_id}:
-    post:
-      summary: Generate daily natal chart image on-the-fly with ETag caching
-      operationId: generateNatalDailyImage
+    get:
+      summary: Generate daily natal chart image from natal_daily collection record
+      operationId: getNatalDailyImage
       security:
         - ApiKeyAuth: []
       parameters:
@@ -333,19 +333,13 @@ paths:
           required: true
           schema:
             type: string
-          description: MongoDB document ID
+          description: MongoDB natal_daily document ID
         - name: If-None-Match
           in: header
           required: false
           schema:
             type: string
           description: ETag header for cache validation
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/NatalDailyImageRequest'
       responses:
         '200':
           description: Daily natal chart image generated successfully
@@ -363,7 +357,11 @@ paths:
               schema:
                 type: string
             X-Mongo-ID:
-              description: MongoDB document ID
+              description: MongoDB natal_daily document ID
+              schema:
+                type: string
+            X-Natal-ID:
+              description: MongoDB natal document ID
               schema:
                 type: string
             X-Transit-Date:
@@ -390,10 +388,8 @@ paths:
           description: Invalid MongoDB ID format
         '401':
           description: Unauthorized
-        '402':
-          description: Payment Required - Premium access required for location/relocation types
-        '403':
-          description: Birth information doesn't match
+        '404':
+          description: Daily natal chart record not found
         '500':
           description: Internal server error
 
@@ -897,91 +893,7 @@ components:
          today_year: 2024
          today_time: "15:30"
 
-    NatalDailyImageRequest:
-      type: object
-      properties:
-        birth_day:
-          type: integer
-          minimum: 1
-          maximum: 31
-          description: Birth day (1-31)
-        birth_month:
-          type: integer
-          minimum: 1
-          maximum: 12
-          description: Birth month (1-12)
-        birth_year:
-          type: integer
-          minimum: 1900
-          maximum: 2100
-          description: Birth year
-        birth_time:
-          type: string
-          format: time
-          pattern: '^\d{2}:\d{2}$'
-          description: Birth time in HH:MM format
-        chart_type:
-          type: string
-          enum: [classic, location, relocation]
-          description: Chart type to generate
-        current_location:
-          type: string
-          description: Current location name (required for location type)
-        current_latitude:
-          type: number
-          minimum: -90
-          maximum: 90
-          description: Current latitude coordinate (required for location type)
-        current_longitude:
-          type: number
-          minimum: -180
-          maximum: 180
-          description: Current longitude coordinate (required for location type)
-        relocation_location:
-          type: string
-          description: Relocation location name (required for relocation type)
-        relocation_latitude:
-          type: number
-          minimum: -90
-          maximum: 90
-          description: Relocation latitude coordinate (required for relocation type)
-        relocation_longitude:
-          type: number
-          minimum: -180
-          maximum: 180
-          description: Relocation longitude coordinate (required for relocation type)
-        today_day:
-          type: integer
-          minimum: 1
-          maximum: 31
-          description: Today's day (1-31), optional
-        today_month:
-          type: integer
-          minimum: 1
-          maximum: 12
-          description: Today's month (1-12), optional
-        today_year:
-          type: integer
-          minimum: 1900
-          maximum: 2100
-          description: Today's year, optional
-        today_time:
-          type: string
-          format: time
-          pattern: '^\d{2}:\d{2}$'
-          description: Today's time in HH:MM format, optional
-      required:
-        - birth_day
-        - birth_month
-        - birth_year
-        - birth_time
-        - chart_type
-      example:
-        birth_day: 1
-        birth_month: 1
-        birth_year: 1990
-        birth_time: "12:00"
-        chart_type: "classic"
+
 
     TransitResponse:
       type: object

@@ -26,8 +26,7 @@ from ..core.domain_models import (
     NatalStatsRequest,
     NatalTransitRequest,
     NatalTransitLocationRequest,
-    NatalTransitRelocationRequest,
-    NatalDailyImageRequest
+    NatalTransitRelocationRequest
 )
 
 from ..services.natal_chart_service import NatalChartService
@@ -1062,19 +1061,17 @@ async def get_natal_transit_relocation(
         )
 
 
-@app.post("/natal-daily-image/{mongo_id}")
-async def generate_natal_daily_image(
+@app.get("/natal-daily-image/{mongo_id}")
+async def get_natal_daily_image(
     mongo_id: str,
-    request: NatalDailyImageRequest,
     api_key: str = Depends(verify_api_key),
     if_none_match: Optional[str] = Header(None, alias="If-None-Match")
 ) -> Response:
     """
-    Generate daily natal chart image on-the-fly with ETag caching.
+    Generate daily natal chart image from natal_daily collection record.
     
     Args:
-        mongo_id: MongoDB document ID
-        request: Birth information and chart parameters
+        mongo_id: MongoDB natal_daily document ID or natal_id
         api_key: API key for authentication
         if_none_match: ETag header for cache validation
         
@@ -1082,35 +1079,52 @@ async def generate_natal_daily_image(
         Response: Generated natal chart image as PNG with caching headers
     """
     try:
-        # Validate birth information
-        birth_document = await validate_birth_info(
-            mongo_id=mongo_id,
-            birth_day=request.birth_day,
-            birth_month=request.birth_month,
-            birth_year=request.birth_year,
-            birth_time=request.birth_time
-        )
+        # Validate MongoDB ID format
+        if not ObjectId.is_valid(mongo_id):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid MongoDB ID format"
+            )
         
-        # Check premium access for premium chart types
-        if request.chart_type in ["location", "relocation"]:
-            await check_premium_access(birth_document)
+        # Try to get natal_daily record first
+        daily_record = await natal_daily_collection.find_one({"_id": ObjectId(mongo_id)})
         
-        # Set default values for today if not provided
-        today = datetime.now()
-        today_day = request.today_day or today.day
-        today_month = request.today_month or today.month
-        today_year = request.today_year or today.year
-        today_time = request.today_time or today.strftime("%H:%M")
+        # If not found, try to find by natal_id (fallback for user convenience)
+        if not daily_record:
+            daily_record = await natal_daily_collection.find_one({"natal_id": mongo_id})
         
-        # Format dates for processing
-        today_date = f"{today_year}-{today_month:02d}-{today_day:02d}"
+        if not daily_record:
+            # Check if this is a natal record ID
+            natal_record = await natal_collection.find_one({"_id": ObjectId(mongo_id)})
+            if natal_record:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No daily chart records found for natal ID {mongo_id}. Use a natal_daily record ID instead."
+                )
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Daily natal chart record not found"
+                )
         
-        # Generate ETag based on request parameters
-        etag_data = f"{mongo_id}_{today_date}_{request.chart_type}"
-        if request.chart_type == "location":
-            etag_data += f"_{request.current_latitude}_{request.current_longitude}"
-        elif request.chart_type == "relocation":
-            etag_data += f"_{request.relocation_latitude}_{request.relocation_longitude}"
+        # Get related natal record for user info
+        natal_record = await natal_collection.find_one({"_id": ObjectId(daily_record["natal_id"])})
+        
+        if not natal_record:
+            raise HTTPException(
+                status_code=404,
+                detail="Related natal chart record not found"
+            )
+        
+        # Generate ETag based on record data
+        chart_type = daily_record.get("type") or "classic"  # Get type early for ETag
+        etag_data = f"{mongo_id}_{daily_record['date']}_{chart_type}"
+        if daily_record.get("location_params"):
+            location_params = daily_record["location_params"]
+            if "current_latitude" in location_params:
+                etag_data += f"_{location_params['current_latitude']}_{location_params['current_longitude']}"
+            elif "relocation_latitude" in location_params:
+                etag_data += f"_{location_params['relocation_latitude']}_{location_params['relocation_longitude']}"
         
         etag = hashlib.md5(etag_data.encode()).hexdigest()
         
@@ -1124,76 +1138,67 @@ async def generate_natal_daily_image(
                 }
             )
         
-        # Prepare location parameters based on chart type
-        location_params = None
-        if request.chart_type == "location":
-            location_params = {
-                "current_location": request.current_location,
-                "current_latitude": request.current_latitude,
-                "current_longitude": request.current_longitude
-            }
-        elif request.chart_type == "relocation":
-            location_params = {
-                "relocation_location": request.relocation_location,
-                "relocation_latitude": request.relocation_latitude,
-                "relocation_longitude": request.relocation_longitude
-            }
-        
-        # Get or generate transit data from cache
-        transit_data = await get_or_generate_transit_cache(
-            mongo_id=mongo_id,
-            chart_type=request.chart_type,
-            birth_document=birth_document,
-            today_date=today_date,
-            today_time=today_time,
-            location_params=location_params
-        )
-        
         # Prepare user info for chart generation
         user_info = {
-            "First Name": birth_document.get("first_name", ""),
-            "Last Name": birth_document.get("last_name", ""),
-            "Date of Birth": f"{birth_document['birth_day']:02d}-{birth_document['birth_month']:02d}-{birth_document['birth_year']} {birth_document['birth_time']}",
-            "Place of Birth": birth_document.get("birth_place", ""),
-            "Latitude": birth_document.get("latitude"),
-            "Longitude": birth_document.get("longitude")
+            "First Name": natal_record.get("first_name", ""),
+            "Last Name": natal_record.get("last_name", ""),
+            "Date of Birth": f"{natal_record['birth_day']:02d}-{natal_record['birth_month']:02d}-{natal_record['birth_year']} {natal_record['birth_time']}",
+            "Place of Birth": natal_record.get("birth_place", ""),
+            "Latitude": natal_record.get("latitude"),
+            "Longitude": natal_record.get("longitude")
         }
         
+        # Get cached transit data (handle both chart_data and full_report fields)
+        transit_data = daily_record.get("chart_data", {})
+        location_params = daily_record.get("location_params", {})
+        
+        # Handle legacy records that may have full_report instead of chart_data
+        if not transit_data and "full_report" in daily_record:
+            logger.warning(f"Using full_report instead of chart_data for record {daily_record['_id']}")
+            # For now, generate a basic chart without transit data
+            transit_data = {}
+        
         # Generate chart image based on chart type
-        if request.chart_type == "classic":
-            # Generate classic chart with transits
+        if chart_type == "classic":
+            # Generate classic chart
             chart_data_bytes = natal_chart_service.generate_chart(
                 user_info, 
                 template='5', 
-                timezone=birth_document.get("timezone"),
-                transit_data=transit_data
+                timezone=natal_record.get("timezone")
             )
-        elif request.chart_type == "location":
-            # Generate location-based chart
-            chart_data_bytes = natal_chart_service.generate_chart(
-                user_info, 
-                template='5', 
-                timezone=birth_document.get("timezone"),
-                transit_data=transit_data,
-                current_location=request.current_location,
-                current_latitude=request.current_latitude,
-                current_longitude=request.current_longitude
-            )
-        elif request.chart_type == "relocation":
+        elif chart_type == "location":
+            # For location-based charts, use current location if available
+            if location_params.get("current_latitude") and location_params.get("current_longitude"):
+                user_info_copy = user_info.copy()
+                user_info_copy["Latitude"] = location_params["current_latitude"]
+                user_info_copy["Longitude"] = location_params["current_longitude"]
+                user_info_copy["Place of Birth"] = location_params.get("current_location", user_info["Place of Birth"])
+                chart_data_bytes = natal_chart_service.generate_chart(
+                    user_info_copy, 
+                    template='5', 
+                    timezone=natal_record.get("timezone")
+                )
+            else:
+                # Fallback to classic chart if no location data
+                chart_data_bytes = natal_chart_service.generate_chart(
+                    user_info, 
+                    template='5', 
+                    timezone=natal_record.get("timezone")
+                )
+        elif chart_type == "relocation":
             # Generate relocation-based chart
             relocated_user_info = user_info.copy()
-            relocated_user_info["Place of Birth"] = request.relocation_location
-            relocated_user_info["Latitude"] = request.relocation_latitude
-            relocated_user_info["Longitude"] = request.relocation_longitude
+            relocated_user_info["Place of Birth"] = location_params.get("relocation_location", user_info["Place of Birth"])
+            relocated_user_info["Latitude"] = location_params.get("relocation_latitude")
+            relocated_user_info["Longitude"] = location_params.get("relocation_longitude")
             
             chart_data_bytes = natal_chart_service.generate_chart(
                 relocated_user_info, 
                 template='5', 
-                timezone=birth_document.get("timezone"),
-                transit_data=transit_data
+                timezone=natal_record.get("timezone")
             )
         else:
-            raise ValueError(f"Unknown chart type: {request.chart_type}")
+            raise ValueError(f"Unknown chart type: {chart_type}")
         
         # Load and resize image
         image = Image.open(io.BytesIO(chart_data_bytes))
@@ -1211,7 +1216,7 @@ async def generate_natal_daily_image(
         final_image_bytes = output.getvalue()
         
         # Generate filename for content disposition
-        filename = f"natal_daily_{request.chart_type}_{birth_document.get('first_name', 'chart')}_{today_date}.png"
+        filename = f"natal_daily_{chart_type}_{natal_record.get('first_name', 'chart')}_{daily_record['date']}.png"
         
         # Return image with caching headers
         return Response(
@@ -1222,9 +1227,10 @@ async def generate_natal_daily_image(
                 "Content-Disposition": f'inline; filename="{filename}"',
                 "ETag": etag,
                 "Cache-Control": "public, max-age=86400",  # 24 hours
-                "X-Chart-Type": request.chart_type,
+                "X-Chart-Type": chart_type,
                 "X-Mongo-ID": mongo_id,
-                "X-Transit-Date": today_date
+                "X-Natal-ID": daily_record["natal_id"],
+                "X-Transit-Date": daily_record["date"]
             }
         )
         

@@ -241,36 +241,4 @@ class NatalTransitRelocationRequest(BaseModel):
         }
 
 
-class NatalDailyImageRequest(BaseModel):
-    """Request model for natal daily image generation."""
-    birth_day: int
-    birth_month: int
-    birth_year: int
-    birth_time: str  # Format: HH:MM
-    chart_type: str  # "classic", "location", "relocation"
-    current_location: Optional[str] = None
-    current_latitude: Optional[float] = None
-    current_longitude: Optional[float] = None
-    relocation_location: Optional[str] = None
-    relocation_latitude: Optional[float] = None
-    relocation_longitude: Optional[float] = None
-    today_day: Optional[int] = None
-    today_month: Optional[int] = None
-    today_year: Optional[int] = None
-    today_time: Optional[str] = None  # Format: HH:MM
-
-    class Config:
-        """Pydantic model configuration."""
-        json_schema_extra = {
-            "example": {
-                "birth_day": 1,
-                "birth_month": 1,
-                "birth_year": 1990,
-                "birth_time": "12:00",
-                "chart_type": "classic",
-                "today_day": 4,
-                "today_month": 1,
-                "today_year": 2024,
-                "today_time": "15:30"
-            }
-        } 
+ 
