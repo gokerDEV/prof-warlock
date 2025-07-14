@@ -63,13 +63,24 @@ class NatalChartService:
             
         Returns:
             datetime: UTC datetime
+            
+        Raises:
+            ValueError: If timezone_offset is not in the correct format
         """
         if not timezone_offset:
             return local_datetime
+        
+        # Validate timezone format - must be +/-HH:MM
+        import re
+        if not re.match(r'^[+-]\d{1,2}:\d{2}$', timezone_offset):
+            raise ValueError(f"Invalid timezone format: '{timezone_offset}'. Must be in +/-HH:MM format (e.g., +03:00, -05:00)")
             
         # Parse timezone offset
         sign = 1 if timezone_offset[0] == '+' else -1
-        hours, minutes = map(int, timezone_offset[1:].split(':'))
+        try:
+            hours, minutes = map(int, timezone_offset[1:].split(':'))
+        except ValueError:
+            raise ValueError(f"Invalid timezone format: '{timezone_offset}'. Must be in +/-HH:MM format (e.g., +03:00, -05:00)")
         
         # Calculate offset in total minutes
         total_minutes = sign * (hours * 60 + minutes)

@@ -436,10 +436,11 @@ async def get_or_generate_transit_cache(
                 birth_dt = datetime.strptime(birth_datetime, "%d-%m-%Y %H:%M")
                 today_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
                 
-                # Convert to UTC if timezone is provided
-                if birth_document.get("timezone"):
-                    birth_utc_dt = natal_chart_service._convert_local_to_utc(birth_dt, birth_document.get("timezone"))
-                    today_utc_dt = natal_chart_service._convert_local_to_utc(today_dt, birth_document.get("timezone"))
+                # Convert to UTC if timezone is provided (use location timezone if available, otherwise birth timezone)
+                timezone_to_use = location_params.get("timezone") or birth_document.get("timezone")
+                if timezone_to_use:
+                    birth_utc_dt = natal_chart_service._convert_local_to_utc(birth_dt, timezone_to_use)
+                    today_utc_dt = natal_chart_service._convert_local_to_utc(today_dt, timezone_to_use)
                 else:
                     birth_utc_dt = birth_dt
                     today_utc_dt = today_dt
@@ -547,10 +548,11 @@ async def get_or_generate_transit_cache(
                 birth_dt = datetime.strptime(birth_datetime, "%d-%m-%Y %H:%M")
                 today_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
                 
-                # Convert to UTC if timezone is provided
-                if birth_document.get("timezone"):
-                    birth_utc_dt = natal_chart_service._convert_local_to_utc(birth_dt, birth_document.get("timezone"))
-                    today_utc_dt = natal_chart_service._convert_local_to_utc(today_dt, birth_document.get("timezone"))
+                # Convert to UTC if timezone is provided (use relocation timezone if available, otherwise birth timezone)
+                timezone_to_use = location_params.get("timezone") or birth_document.get("timezone")
+                if timezone_to_use:
+                    birth_utc_dt = natal_chart_service._convert_local_to_utc(birth_dt, timezone_to_use)
+                    today_utc_dt = natal_chart_service._convert_local_to_utc(today_dt, timezone_to_use)
                 else:
                     birth_utc_dt = birth_dt
                     today_utc_dt = today_dt
@@ -1200,7 +1202,8 @@ async def get_natal_transit_location(
         location_params = {
             "current_location": request.current_location,
             "current_latitude": request.current_latitude,
-            "current_longitude": request.current_longitude
+            "current_longitude": request.current_longitude,
+            "timezone": request.timezone
         }
         
         # Get or generate transit data from cache
@@ -1284,7 +1287,8 @@ async def get_natal_transit_relocation(
         location_params = {
             "relocation_location": request.relocation_location,
             "relocation_latitude": request.relocation_latitude,
-            "relocation_longitude": request.relocation_longitude
+            "relocation_longitude": request.relocation_longitude,
+            "timezone": request.timezone
         }
         
         # Get or generate transit data from cache

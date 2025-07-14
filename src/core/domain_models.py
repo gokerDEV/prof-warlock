@@ -184,6 +184,7 @@ class NatalTransitLocationRequest(BaseModel):
     current_location: str
     current_latitude: float
     current_longitude: float
+    timezone: Optional[str] = Field(None, pattern=r'^[+-]\d{1,2}:\d{2}$')  # Format: +/-HH:MM
     today_day: Optional[int] = None
     today_month: Optional[int] = None
     today_year: Optional[int] = None
@@ -200,6 +201,7 @@ class NatalTransitLocationRequest(BaseModel):
                 "current_location": "Los Angeles",
                 "current_latitude": 34.0522,
                 "current_longitude": -118.2437,
+                "timezone": "-05:00",
                 "today_day": 4,
                 "today_month": 1,
                 "today_year": 2024,
@@ -217,6 +219,7 @@ class NatalTransitRelocationRequest(BaseModel):
     relocation_location: str
     relocation_latitude: float
     relocation_longitude: float
+    timezone: Optional[str] = Field(None, pattern=r'^[+-]\d{1,2}:\d{2}$')  # Format: +/-HH:MM
     today_day: Optional[int] = None
     today_month: Optional[int] = None
     today_year: Optional[int] = None
@@ -233,6 +236,7 @@ class NatalTransitRelocationRequest(BaseModel):
                 "relocation_location": "London",
                 "relocation_latitude": 51.5074,
                 "relocation_longitude": -0.1278,
+                "timezone": "+00:00",
                 "today_day": 4,
                 "today_month": 1,
                 "today_year": 2024,
