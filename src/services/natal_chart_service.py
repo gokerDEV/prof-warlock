@@ -429,19 +429,8 @@ class NatalChartService:
         # Configure display settings based on parameter
         ChartConfigUtils.configure_display_settings(config, show_all_celestial_bodies)
         
-        config.theme.background = background_color
-        config.theme.foreground = "#393939"
-        config.theme.fire = "#393939"
-        config.theme.earth = "#393939"
-        config.theme.air = "#393939"
-        config.theme.water = "#393939"
-        config.theme.points = "#393939"
-        config.theme.asteroids = "#393939"
-        config.theme.positive = "#393939"
-        config.theme.negative = "#393939"
-        config.theme.others = "#393939"
-        config.theme.dim = "#393939"
-        config.theme.transparency = 0
+        # Configure theme settings (includes transit circle background removal)
+        ChartConfigUtils.configure_theme_settings(config, background_color)
 
         # Create natal data with config using UTC time for chart calculation
         mimi = Data(
@@ -912,19 +901,8 @@ class NatalChartService:
         # Configure display settings based on parameter
         ChartConfigUtils.configure_display_settings(config, show_all_celestial_bodies)
         
-        config.theme.background = background_color
-        config.theme.foreground = "#393939"
-        config.theme.fire = "#393939"
-        config.theme.earth = "#393939"
-        config.theme.air = "#393939"
-        config.theme.water = "#393939"
-        config.theme.points = "#393939"
-        config.theme.asteroids = "#393939"
-        config.theme.positive = "#393939"
-        config.theme.negative = "#393939"
-        config.theme.others = "#393939"
-        config.theme.dim = "#393939"
-        config.theme.transparency = 0
+        # Configure theme settings (includes transit circle background removal)
+        ChartConfigUtils.configure_theme_settings(config, background_color)
         
         # Create Data objects based on chart type
         if chart_type == "classic":

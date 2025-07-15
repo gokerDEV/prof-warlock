@@ -9,6 +9,29 @@ class ChartConfigUtils:
     """Utility class for chart configuration management."""
     
     @staticmethod
+    def configure_theme_settings(config: Config, background_color: str = "#ffffff") -> None:
+        """
+        Configure theme settings for charts.
+        
+        Args:
+            config: The natal Config object to modify
+            background_color: Background color for the chart
+        """
+        config.theme.background = background_color
+        config.theme.foreground = "#393939"
+        config.theme.fire = "#393939"
+        config.theme.earth = "#393939"
+        config.theme.air = "#393939"
+        config.theme.water = "#393939"
+        config.theme.points = "#393939"
+        config.theme.asteroids = "#393939"
+        config.theme.positive = "#393939"
+        config.theme.negative = "#393939"
+        config.theme.others = "#393939"
+        config.theme.dim = background_color
+        config.theme.transparency = 0  
+    
+    @staticmethod
     def configure_display_settings(config: Config, show_all: bool = True) -> None:
         """
         Configure display settings for celestial bodies.

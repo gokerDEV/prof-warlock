@@ -360,9 +360,11 @@ async def get_or_generate_transit_cache(
                 # Create both natal and transit data at birth location for classic
                 natal_config = Config()
                 ChartConfigUtils.configure_display_settings(natal_config, show_all=True)
+                ChartConfigUtils.configure_theme_settings(natal_config, "#ffffff")
                 
                 transit_config = Config()
                 ChartConfigUtils.configure_display_settings(transit_config, show_all=True)
+                ChartConfigUtils.configure_theme_settings(transit_config, "#ffffff")
                 
                 natal_data = Data(
                     name="Natal",
@@ -490,9 +492,11 @@ async def get_or_generate_transit_cache(
                 # Create natal data at birth location
                 natal_config = Config()
                 ChartConfigUtils.configure_display_settings(natal_config, show_all=True)
+                ChartConfigUtils.configure_theme_settings(natal_config, "#ffffff")
                 
                 transit_config = Config()
                 ChartConfigUtils.configure_display_settings(transit_config, show_all=True)
+                ChartConfigUtils.configure_theme_settings(transit_config, "#ffffff")
                 
                 natal_data = Data(
                     name="Natal",
@@ -629,9 +633,11 @@ async def get_or_generate_transit_cache(
                 # Create natal data at relocated location (as if born there)
                 natal_config = Config()
                 ChartConfigUtils.configure_display_settings(natal_config, show_all=True)
+                ChartConfigUtils.configure_theme_settings(natal_config, "#ffffff")
                 
                 transit_config = Config()
                 ChartConfigUtils.configure_display_settings(transit_config, show_all=True)
+                ChartConfigUtils.configure_theme_settings(transit_config, "#ffffff")
                 
                 natal_data = Data(
                     name="Natal",
