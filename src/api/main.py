@@ -1530,11 +1530,24 @@ async def get_natal_daily_image(
             else:
                 raise ValueError(f"Unknown chart type: {chart_type}")
             
-            # Create transit chart with both natal and transit data
+            # Create transit chart with both natal and transit data  
+            # Configure chart to show both natal (inner) and transit (outer) circles
             chart = Chart(data1=natal_data, data2=transit_data_obj, width=1600)
+            
+            # Debug: Check if chart has both data sets
+            logger.info(f"🔍 Chart created with data1: {natal_data.name}, data2: {transit_data_obj.name}")
             
             # Generate SVG chart
             chart_svg = chart.svg
+            
+            # Debug: Check if SVG contains transit elements
+            if "transit" in chart_svg.lower():
+                logger.info("✅ SVG contains transit elements")
+            else:
+                logger.warning("⚠️ SVG does not contain transit elements")
+                
+            # Debug: Log SVG length
+            logger.info(f"📏 SVG length: {len(chart_svg)} characters")
             
             # Convert SVG to PNG
             import cairosvg
