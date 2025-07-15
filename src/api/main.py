@@ -1432,6 +1432,7 @@ async def get_natal_daily_image(
         
         # Generate ETag based on record data
         chart_type = daily_record.get("type") or "classic"  # Get type early for ETag
+        print(f"🎯 DEBUG: Chart type: {chart_type}")
         etag_data = f"{mongo_id}_{daily_record['date']}_{chart_type}"
         if daily_record.get("location_params"):
             location_params = daily_record["location_params"]
@@ -1494,9 +1495,27 @@ async def get_natal_daily_image(
             
             # Convert to UTC if timezone is provided
             if natal_record.get("timezone"):
-                from pytz import timezone
-                tz = timezone(natal_record.get("timezone"))
-                birth_utc_dt = tz.localize(birth_dt).astimezone(timezone('UTC')).replace(tzinfo=None)
+                # Handle timezone offset string like "+03:00" or "-05:00"
+                timezone_str = natal_record.get("timezone")
+                from datetime import timedelta
+                
+                # Parse timezone offset
+                if timezone_str.startswith('+'):
+                    sign = 1
+                    offset_str = timezone_str[1:]
+                elif timezone_str.startswith('-'):
+                    sign = -1
+                    offset_str = timezone_str[1:]
+                else:
+                    sign = 1
+                    offset_str = timezone_str
+                
+                # Parse hours and minutes
+                hours, minutes = map(int, offset_str.split(':'))
+                offset = timedelta(hours=hours, minutes=minutes) * sign
+                
+                # Convert to UTC
+                birth_utc_dt = birth_dt - offset
             else:
                 birth_utc_dt = birth_dt
                 
@@ -1534,27 +1553,6 @@ async def get_natal_daily_image(
                 current_lat = location_params.get("current_latitude")
                 current_lon = location_params.get("current_longitude")
                 
-                # If no current coordinates provided, try to geocode from location name
-                if current_lat is None or current_lon is None:
-                    current_location_name = location_params.get("current_location")
-                    if current_location_name:
-                        from geopy.geocoders import Nominatim
-                        geolocator = Nominatim(user_agent="prof-warlock")
-                        try:
-                            current_location = geolocator.geocode(current_location_name)
-                            if current_location:
-                                current_lat, current_lon = current_location.latitude, current_location.longitude
-                                logger.info(f"🌍 Geocoded current location '{current_location_name}' to {current_lat}, {current_lon}")
-                            else:
-                                logger.warning(f"⚠️ Could not geocode current location: {current_location_name}")
-                        except Exception as e:
-                            logger.warning(f"⚠️ Geocoding error for '{current_location_name}': {e}")
-                    
-                    # If still no current coordinates, fallback to birth location
-                    if current_lat is None or current_lon is None:
-                        logger.info(f"🏠 No current coordinates found, using birth location as fallback")
-                        current_lat = natal_record.get("latitude")
-                        current_lon = natal_record.get("longitude")
                 
                 logger.info(f"🎯 Creating location chart with coordinates: {current_lat}, {current_lon}")
                 logger.info(f"🎯 Birth UTC: {birth_utc_dt.strftime('%Y-%m-%d %H:%M')}")
