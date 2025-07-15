@@ -31,6 +31,7 @@ from .qr_code_service import QRCodeService
 from .planet_status_service import PlanetStatusService
 from .svg_path_service import SVGPathService
 from ..utils.timezone_utils import TimezoneUtils
+from ..utils.chart_config_utils import ChartConfigUtils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -330,6 +331,8 @@ class NatalChartService:
     #     svg_paths_dir = os.path.join(assets_path, 'svg_paths')
     #     AspectMatrixService.draw_aspect_matrix(draw, grid, center_x, center_y, svg_paths_dir)
 
+
+
     @staticmethod
     def generate_chart(
         user_info: Dict[str, str], 
@@ -342,7 +345,8 @@ class NatalChartService:
         transit_date: Optional[str] = None,
         transit_time: Optional[str] = None,
         chart_type: str = "natal",
-        location_params: Optional[Dict] = None
+        location_params: Optional[Dict] = None,
+        show_all_celestial_bodies: bool = True
     ) -> bytes:
         """
         Generate a natal chart PNG or transit chart PNG.
@@ -359,6 +363,7 @@ class NatalChartService:
             transit_time: Transit time in HH:MM format (optional)
             chart_type: Chart type ("natal", "classic", "location", "relocation")
             location_params: Location parameters for location/relocation charts
+            show_all_celestial_bodies: Show all celestial bodies (True) or only main planets (False)
             
         Returns:
             bytes: PNG image data
@@ -376,7 +381,8 @@ class NatalChartService:
                 transit_date=transit_date,
                 transit_time=transit_time,
                 chart_type=chart_type,
-                location_params=location_params
+                location_params=location_params,
+                show_all_celestial_bodies=show_all_celestial_bodies
             )
         
         # Generate regular natal chart
@@ -419,6 +425,10 @@ class NatalChartService:
         config = Config(
             chart=ChartConfig(stroke_width=1, ring_thickness_fraction=0.15)
         )
+        
+        # Configure display settings based on parameter
+        ChartConfigUtils.configure_display_settings(config, show_all_celestial_bodies)
+        
         config.theme.background = background_color
         config.theme.foreground = "#393939"
         config.theme.fire = "#393939"
@@ -836,7 +846,8 @@ class NatalChartService:
         transit_date: str = None,
         transit_time: str = None,
         chart_type: str = "classic",
-        location_params: Optional[Dict] = None
+        location_params: Optional[Dict] = None,
+        show_all_celestial_bodies: bool = True
     ) -> bytes:
         """
         Generate a transit chart PNG using template with natal and transit data.
@@ -853,6 +864,7 @@ class NatalChartService:
             transit_time: Transit time in HH:MM format
             chart_type: Chart type ("classic", "location", "relocation")
             location_params: Location parameters for location/relocation charts
+            show_all_celestial_bodies: Show all celestial bodies (True) or only main planets (False)
             
         Returns:
             bytes: PNG image data
@@ -896,6 +908,10 @@ class NatalChartService:
         config = Config(
             chart=ChartConfig(stroke_width=1, ring_thickness_fraction=0.15)
         )
+        
+        # Configure display settings based on parameter
+        ChartConfigUtils.configure_display_settings(config, show_all_celestial_bodies)
+        
         config.theme.background = background_color
         config.theme.foreground = "#393939"
         config.theme.fire = "#393939"
@@ -1469,13 +1485,17 @@ class NatalChartService:
                     raise ValueError(f"Could not geocode location: {birth_place}")
                 lat, lon = location.latitude, location.longitude
 
+            # Create config with all celestial bodies displayed (stats always need all objects)
+            config = Config()
+            ChartConfigUtils.configure_display_settings(config, show_all=True)
+
             # Create natal data with UTC time
             natal_data = Data(
                 name="Natal",
                 lat=lat,
                 lon=lon,
                 utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
-                config=Config()
+                config=config
             )
 
             # Initialize Zodiac service with natal data
@@ -1492,7 +1512,7 @@ class NatalChartService:
                 lat=lat,
                 lon=lon,
                 utc_dt=today_utc_dt.strftime("%Y-%m-%d %H:%M"),
-                config=Config()
+                config=config
             )
 
             # Calculate stats

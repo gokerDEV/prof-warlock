@@ -31,6 +31,7 @@ from ..core.domain_models import (
 
 from ..services.natal_chart_service import NatalChartService
 from ..utils.timezone_utils import TimezoneUtils
+from ..utils.chart_config_utils import ChartConfigUtils
 
 APP_VERSION = __version__
 
@@ -344,29 +345,31 @@ async def get_or_generate_transit_cache(
                 
                 # Parse dates
                 birth_dt = datetime.strptime(birth_datetime, "%d-%m-%Y %H:%M")
-                today_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
+                today_utc_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
                 
                 # Convert to UTC if timezone is provided
-                if birth_document.get("timezone"):
-                    from pytz import timezone
-                    tz = timezone(birth_document.get("timezone"))
-                    birth_utc_dt = tz.localize(birth_dt).astimezone(timezone('UTC')).replace(tzinfo=None)
-                    today_utc_dt = tz.localize(today_dt).astimezone(timezone('UTC')).replace(tzinfo=None)
+                if location_params.get("timezone"):
+                    birth_utc_dt = TimezoneUtils.convert_local_to_utc(birth_dt, location_params.get("timezone"))
                 else:
                     birth_utc_dt = birth_dt
-                    today_utc_dt = today_dt
                 
                 # Get birth location coordinates
                 birth_lat = birth_document.get("latitude")
                 birth_lon = birth_document.get("longitude")
                 
                 # Create both natal and transit data at birth location for classic
+                natal_config = Config()
+                ChartConfigUtils.configure_display_settings(natal_config, show_all=True)
+                
+                transit_config = Config()
+                ChartConfigUtils.configure_display_settings(transit_config, show_all=True)
+                
                 natal_data = Data(
                     name="Natal",
                     lat=birth_lat,
                     lon=birth_lon,
                     utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
-                    config=Config()
+                    config=natal_config
                 )
                 
                 transit_data_obj = Data(
@@ -374,7 +377,7 @@ async def get_or_generate_transit_cache(
                     lat=birth_lat,
                     lon=birth_lon,
                     utc_dt=today_utc_dt.strftime("%Y-%m-%d %H:%M"),
-                    config=Config()
+                    config=transit_config
                 )
                 
                 # Calculate stats between birth location natal and birth location transits
@@ -485,12 +488,18 @@ async def get_or_generate_transit_cache(
                 location_params["current_longitude"] = current_lon
                 
                 # Create natal data at birth location
+                natal_config = Config()
+                ChartConfigUtils.configure_display_settings(natal_config, show_all=True)
+                
+                transit_config = Config()
+                ChartConfigUtils.configure_display_settings(transit_config, show_all=True)
+                
                 natal_data = Data(
                     name="Natal",
                     lat=birth_lat,
                     lon=birth_lon,
                     utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
-                    config=Config()
+                    config=natal_config
                 )
                 
                 # Create transit data at current location
@@ -499,7 +508,7 @@ async def get_or_generate_transit_cache(
                     lat=current_lat,
                     lon=current_lon,
                     utc_dt=today_utc_dt.strftime("%Y-%m-%d %H:%M"),
-                    config=Config()
+                    config=transit_config
                 )
                 
                 # Calculate stats between birth location natal and current location transits
@@ -618,12 +627,18 @@ async def get_or_generate_transit_cache(
                 location_params["relocation_longitude"] = relocation_lon
                 
                 # Create natal data at relocated location (as if born there)
+                natal_config = Config()
+                ChartConfigUtils.configure_display_settings(natal_config, show_all=True)
+                
+                transit_config = Config()
+                ChartConfigUtils.configure_display_settings(transit_config, show_all=True)
+                
                 natal_data = Data(
                     name="Natal",
                     lat=relocation_lat,
                     lon=relocation_lon,
                     utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
-                    config=Config()
+                    config=natal_config
                 )
                 
                 # Create transit data at relocated location
@@ -632,7 +647,7 @@ async def get_or_generate_transit_cache(
                     lat=relocation_lat,
                     lon=relocation_lon,
                     utc_dt=today_utc_dt.strftime("%Y-%m-%d %H:%M"),
-                    config=Config()
+                    config=transit_config
                 )
                 
                 # Calculate stats between relocated natal and relocated transits
@@ -1482,7 +1497,8 @@ async def get_natal_daily_image(
             transit_date=transit_date,
             transit_time=transit_time,
             chart_type=chart_type,
-            location_params=location_params
+            location_params=location_params,
+            show_all_celestial_bodies=False
         )
         
         # Load image and save with proper DPI
