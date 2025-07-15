@@ -915,7 +915,8 @@ async def get_natal_chart_image(
             user_info, 
             qr_url=qr_url, 
             template='5', 
-            timezone=birth_document.get("timezone")
+            timezone=birth_document.get("timezone"),
+            show_all_celestial_bodies=False
         )
 
         # Load image and save with 300 DPI
