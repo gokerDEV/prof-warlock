@@ -311,8 +311,7 @@ async def get_or_generate_transit_cache(
         cache_query = {
             "natal_id": mongo_id,
             "type": chart_type,
-            "date": today_date,
-            "time": today_time
+            "date": today_date
         }
         
         logger.info(f"🔍 Checking transit cache for {mongo_id} type {chart_type} on {today_date}")
@@ -480,6 +479,10 @@ async def get_or_generate_transit_cache(
                         logger.info(f"No current location provided, using birth location as fallback")
                         current_lat, current_lon = birth_lat, birth_lon
                 
+                # Update location_params with geocoded coordinates for caching
+                location_params["current_latitude"] = current_lat
+                location_params["current_longitude"] = current_lon
+                
                 # Create natal data at birth location
                 natal_data = Data(
                     name="Natal",
@@ -608,6 +611,10 @@ async def get_or_generate_transit_cache(
                             else:
                                 raise ValueError(f"Could not geocode birth place: {birth_document.get('birth_place')}")
                         relocation_lat, relocation_lon = birth_lat, birth_lon
+                
+                # Update location_params with geocoded coordinates for caching
+                location_params["relocation_latitude"] = relocation_lat
+                location_params["relocation_longitude"] = relocation_lon
                 
                 # Create natal data at relocated location (as if born there)
                 natal_data = Data(
@@ -1523,9 +1530,35 @@ async def get_natal_daily_image(
                     config=Config()
                 )
                 
-                # Use current location coordinates if available
-                current_lat = location_params.get("current_latitude", natal_record.get("latitude"))
-                current_lon = location_params.get("current_longitude", natal_record.get("longitude"))
+                # Get current location coordinates
+                current_lat = location_params.get("current_latitude")
+                current_lon = location_params.get("current_longitude")
+                
+                # If no current coordinates provided, try to geocode from location name
+                if current_lat is None or current_lon is None:
+                    current_location_name = location_params.get("current_location")
+                    if current_location_name:
+                        from geopy.geocoders import Nominatim
+                        geolocator = Nominatim(user_agent="prof-warlock")
+                        try:
+                            current_location = geolocator.geocode(current_location_name)
+                            if current_location:
+                                current_lat, current_lon = current_location.latitude, current_location.longitude
+                                logger.info(f"🌍 Geocoded current location '{current_location_name}' to {current_lat}, {current_lon}")
+                            else:
+                                logger.warning(f"⚠️ Could not geocode current location: {current_location_name}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Geocoding error for '{current_location_name}': {e}")
+                    
+                    # If still no current coordinates, fallback to birth location
+                    if current_lat is None or current_lon is None:
+                        logger.info(f"🏠 No current coordinates found, using birth location as fallback")
+                        current_lat = natal_record.get("latitude")
+                        current_lon = natal_record.get("longitude")
+                
+                logger.info(f"🎯 Creating location chart with coordinates: {current_lat}, {current_lon}")
+                logger.info(f"🎯 Birth UTC: {birth_utc_dt.strftime('%Y-%m-%d %H:%M')}")
+                logger.info(f"🎯 Transit UTC: {transit_utc_dt.strftime('%Y-%m-%d %H:%M')}")
                 
                 transit_data_obj = Data(
                     name="Transit",
@@ -1537,8 +1570,37 @@ async def get_natal_daily_image(
                 
             elif chart_type == "relocation":
                 # Relocation: natal at relocated location, transit at relocated location
-                relocation_lat = location_params.get("relocation_latitude", natal_record.get("latitude"))
-                relocation_lon = location_params.get("relocation_longitude", natal_record.get("longitude"))
+                relocation_lat = location_params.get("relocation_latitude")
+                relocation_lon = location_params.get("relocation_longitude")
+                
+                # If no relocation coordinates provided, try to geocode from location name
+                if relocation_lat is None or relocation_lon is None:
+                    relocation_location_name = location_params.get("relocation_location")
+                    if relocation_location_name:
+                        from geopy.geocoders import Nominatim
+                        geolocator = Nominatim(user_agent="prof-warlock")
+                        try:
+                            relocation_location = geolocator.geocode(relocation_location_name)
+                            if relocation_location:
+                                relocation_lat, relocation_lon = relocation_location.latitude, relocation_location.longitude
+                                logger.info(f"🌍 Geocoded relocation '{relocation_location_name}' to {relocation_lat}, {relocation_lon}")
+                            else:
+                                logger.warning(f"⚠️ Could not geocode relocation location: {relocation_location_name}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Geocoding error for '{relocation_location_name}': {e}")
+                    
+                    # If still no relocation coordinates, fallback to birth location
+                    if relocation_lat is None or relocation_lon is None:
+                        logger.info(f"🏠 No relocation coordinates found, using birth location as fallback")
+                        relocation_lat = natal_record.get("latitude")
+                        relocation_lon = natal_record.get("longitude")
+                
+                print(f"🎯 DEBUG: Creating relocation chart with coordinates: {relocation_lat}, {relocation_lon}")
+                print(f"🎯 DEBUG: Birth UTC: {birth_utc_dt.strftime('%Y-%m-%d %H:%M')}")
+                print(f"🎯 DEBUG: Transit UTC: {transit_utc_dt.strftime('%Y-%m-%d %H:%M')}")
+                logger.info(f"🎯 Creating relocation chart with coordinates: {relocation_lat}, {relocation_lon}")
+                logger.info(f"🎯 Birth UTC: {birth_utc_dt.strftime('%Y-%m-%d %H:%M')}")
+                logger.info(f"🎯 Transit UTC: {transit_utc_dt.strftime('%Y-%m-%d %H:%M')}")
                 
                 natal_data = Data(
                     name="Natal",
