@@ -348,7 +348,7 @@ async def get_or_generate_transit_cache(
                 today_utc_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
                 
                 # Convert to UTC if timezone is provided
-                if location_params.get("timezone"):
+                if location_params and location_params.get("timezone"):
                     birth_utc_dt = TimezoneUtils.convert_local_to_utc(birth_dt, location_params.get("timezone"))
                 else:
                     birth_utc_dt = birth_dt
@@ -465,12 +465,12 @@ async def get_or_generate_transit_cache(
                         raise ValueError(f"Could not geocode birth place: {birth_document.get('birth_place')}")
                 
                 # Get current location coordinates
-                current_lat = location_params.get("current_latitude")
-                current_lon = location_params.get("current_longitude")
+                current_lat = location_params.get("current_latitude") if location_params else None
+                current_lon = location_params.get("current_longitude") if location_params else None
                 
                 # If no current coordinates provided, try to geocode from location name
                 if current_lat is None or current_lon is None:
-                    current_location_name = location_params.get("current_location")
+                    current_location_name = location_params.get("current_location") if location_params else None
                     if current_location_name:
                         from geopy.geocoders import Nominatim
                         geolocator = Nominatim(user_agent="prof-warlock")
@@ -486,8 +486,9 @@ async def get_or_generate_transit_cache(
                         current_lat, current_lon = birth_lat, birth_lon
                 
                 # Update location_params with geocoded coordinates for caching
-                location_params["current_latitude"] = current_lat
-                location_params["current_longitude"] = current_lon
+                if location_params:
+                    location_params["current_latitude"] = current_lat
+                    location_params["current_longitude"] = current_lon
                 
                 # Create natal data at birth location
                 natal_config = Config()
@@ -579,7 +580,7 @@ async def get_or_generate_transit_cache(
                 # For relocation charts: timezone is required and represents the relocation timezone
                 # Birth time needs to be converted to UTC using the relocation timezone
                 # (as if the person was born at the relocation location)
-                relocation_timezone = location_params.get("timezone")
+                relocation_timezone = location_params.get("timezone") if location_params else None
                 if relocation_timezone:
                     # Convert birth time to UTC using relocation timezone
                     birth_utc_dt = TimezoneUtils.convert_local_to_utc(birth_dt, relocation_timezone)
@@ -596,12 +597,12 @@ async def get_or_generate_transit_cache(
                         today_utc_dt = today_dt
                 
                 # Get relocation coordinates
-                relocation_lat = location_params.get("relocation_latitude")
-                relocation_lon = location_params.get("relocation_longitude")
+                relocation_lat = location_params.get("relocation_latitude") if location_params else None
+                relocation_lon = location_params.get("relocation_longitude") if location_params else None
                 
                 # If no relocation coordinates provided, try to geocode from location name
                 if relocation_lat is None or relocation_lon is None:
-                    relocation_location_name = location_params.get("relocation_location")
+                    relocation_location_name = location_params.get("relocation_location") if location_params else None
                     if relocation_location_name:
                         from geopy.geocoders import Nominatim
                         geolocator = Nominatim(user_agent="prof-warlock")
@@ -627,8 +628,9 @@ async def get_or_generate_transit_cache(
                         relocation_lat, relocation_lon = birth_lat, birth_lon
                 
                 # Update location_params with geocoded coordinates for caching
-                location_params["relocation_latitude"] = relocation_lat
-                location_params["relocation_longitude"] = relocation_lon
+                if location_params:
+                    location_params["relocation_latitude"] = relocation_lat
+                    location_params["relocation_longitude"] = relocation_lon
                 
                 # Create natal data at relocated location (as if born there)
                 natal_config = Config()
