@@ -30,6 +30,7 @@ from .distribution_service import DistributionService
 from .qr_code_service import QRCodeService
 from .planet_status_service import PlanetStatusService
 from .svg_path_service import SVGPathService
+from ..utils.timezone_utils import TimezoneUtils
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -67,28 +68,7 @@ class NatalChartService:
         Raises:
             ValueError: If timezone_offset is not in the correct format
         """
-        if not timezone_offset:
-            return local_datetime
-        
-        # Validate timezone format - must be +/-HH:MM
-        import re
-        if not re.match(r'^[+-]\d{1,2}:\d{2}$', timezone_offset):
-            raise ValueError(f"Invalid timezone format: '{timezone_offset}'. Must be in +/-HH:MM format (e.g., +03:00, -05:00)")
-            
-        # Parse timezone offset
-        sign = 1 if timezone_offset[0] == '+' else -1
-        try:
-            hours, minutes = map(int, timezone_offset[1:].split(':'))
-        except ValueError:
-            raise ValueError(f"Invalid timezone format: '{timezone_offset}'. Must be in +/-HH:MM format (e.g., +03:00, -05:00)")
-        
-        # Calculate offset in total minutes
-        total_minutes = sign * (hours * 60 + minutes)
-        
-        # Convert to UTC by subtracting the timezone offset
-        utc_datetime = local_datetime - timedelta(minutes=total_minutes)
-        
-        return utc_datetime
+        return TimezoneUtils.convert_local_to_utc(local_datetime, timezone_offset)
 
     @staticmethod
     def _parse_with_transformers(body: str) -> Dict[str, str]:
@@ -351,8 +331,55 @@ class NatalChartService:
     #     AspectMatrixService.draw_aspect_matrix(draw, grid, center_x, center_y, svg_paths_dir)
 
     @staticmethod
-    def generate_chart(user_info: Dict[str, str], template: str = '4', background_color: str = "#ffffff", font_size: int = 48, text_color: tuple = (30, 30, 30, 255), qr_url: str = None, timezone: Optional[str] = None) -> bytes:
-        """Generate a natal chart PNG, corrected to pass tests and accept flexible date formats."""
+    def generate_chart(
+        user_info: Dict[str, str], 
+        template: str = '4', 
+        background_color: str = "#ffffff", 
+        font_size: int = 48, 
+        text_color: tuple = (30, 30, 30, 255), 
+        qr_url: str = None, 
+        timezone: Optional[str] = None,
+        transit_date: Optional[str] = None,
+        transit_time: Optional[str] = None,
+        chart_type: str = "natal",
+        location_params: Optional[Dict] = None
+    ) -> bytes:
+        """
+        Generate a natal chart PNG or transit chart PNG.
+        
+        Args:
+            user_info: Birth information
+            template: Chart template to use
+            background_color: Background color
+            font_size: Font size
+            text_color: Text color
+            qr_url: QR code URL to include
+            timezone: Timezone offset
+            transit_date: Transit date in YYYY-MM-DD format (optional)
+            transit_time: Transit time in HH:MM format (optional)
+            chart_type: Chart type ("natal", "classic", "location", "relocation")
+            location_params: Location parameters for location/relocation charts
+            
+        Returns:
+            bytes: PNG image data
+        """
+        # If transit parameters are provided, generate transit chart
+        if transit_date and chart_type != "natal":
+            return NatalChartService._generate_transit_chart(
+                user_info=user_info,
+                template=template,
+                background_color=background_color,
+                font_size=font_size,
+                text_color=text_color,
+                qr_url=qr_url,
+                timezone=timezone,
+                transit_date=transit_date,
+                transit_time=transit_time,
+                chart_type=chart_type,
+                location_params=location_params
+            )
+        
+        # Generate regular natal chart
         date_str = user_info["Date of Birth"]
         if not date_str or date_str == "invalid-date":
             raise ValueError("Date of Birth must be in DD-MM-YYYY HH:MM format")
@@ -795,6 +822,529 @@ class NatalChartService:
 
         buf = BytesIO()
         canvas.save(buf, format="PNG")
+        return buf.getvalue()
+
+    @staticmethod
+    def _generate_transit_chart(
+        user_info: Dict[str, str],
+        template: str = '5',
+        background_color: str = "#ffffff",
+        font_size: int = 48,
+        text_color: tuple = (30, 30, 30, 255),
+        qr_url: str = None,
+        timezone: Optional[str] = None,
+        transit_date: str = None,
+        transit_time: str = None,
+        chart_type: str = "classic",
+        location_params: Optional[Dict] = None
+    ) -> bytes:
+        """
+        Generate a transit chart PNG using template with natal and transit data.
+        
+        Args:
+            user_info: Birth information
+            template: Chart template to use
+            background_color: Background color
+            font_size: Font size
+            text_color: Text color
+            qr_url: QR code URL to include
+            timezone: Timezone offset
+            transit_date: Transit date in YYYY-MM-DD format
+            transit_time: Transit time in HH:MM format
+            chart_type: Chart type ("classic", "location", "relocation")
+            location_params: Location parameters for location/relocation charts
+            
+        Returns:
+            bytes: PNG image data
+        """
+        from natal.data import Data
+        from natal.chart import Chart
+        from natal.config import Config
+        import cairosvg
+        
+        # Parse birth date and time
+        birth_date_str = user_info["Date of Birth"]
+        if len(birth_date_str.strip().split()) == 1:
+            birth_date_str += " 00:00"
+        
+        display_date_str = NatalChartService._flexible_parse_date(birth_date_str)
+        birth_dt = datetime.strptime(display_date_str, "%d-%m-%Y %H:%M")
+        
+        # Parse transit date and time
+        transit_dt = datetime.strptime(f"{transit_date} {transit_time}", "%Y-%m-%d %H:%M")
+        
+        # Convert to UTC if timezone is provided
+        if timezone:
+            birth_utc_dt = TimezoneUtils.convert_local_to_utc(birth_dt, timezone)
+            transit_utc_dt = transit_dt  # Assuming transit_dt is already in UTC
+        else:
+            birth_utc_dt = birth_dt
+            transit_utc_dt = transit_dt
+        
+        # Get coordinates
+        if user_info.get("Latitude") and user_info.get("Longitude"):
+            birth_lat, birth_lon = user_info["Latitude"], user_info["Longitude"]
+        else:
+            from geopy.geocoders import Nominatim
+            geolocator = Nominatim(user_agent="prof-warlock")
+            location = geolocator.geocode(user_info["Place of Birth"])
+            if not location:
+                raise ValueError(f"Could not geocode location: {user_info['Place of Birth']}")
+            birth_lat, birth_lon = location.latitude, location.longitude
+        
+        # Create config for consistent styling
+        config = Config(
+            chart=ChartConfig(stroke_width=1, ring_thickness_fraction=0.15)
+        )
+        config.theme.background = background_color
+        config.theme.foreground = "#393939"
+        config.theme.fire = "#393939"
+        config.theme.earth = "#393939"
+        config.theme.air = "#393939"
+        config.theme.water = "#393939"
+        config.theme.points = "#393939"
+        config.theme.asteroids = "#393939"
+        config.theme.positive = "#393939"
+        config.theme.negative = "#393939"
+        config.theme.others = "#393939"
+        config.theme.dim = "#393939"
+        config.theme.transparency = 0
+        
+        # Create Data objects based on chart type
+        if chart_type == "classic":
+            # Classic: both natal and transit at birth location
+            natal_data = Data(
+                name="Natal",
+                lat=birth_lat,
+                lon=birth_lon,
+                utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                config=config
+            )
+            
+            transit_data_obj = Data(
+                name="Transit",
+                lat=birth_lat,
+                lon=birth_lon,
+                utc_dt=transit_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                config=config
+            )
+            
+        elif chart_type == "location":
+            # Location: natal at birth location, transit at current location
+            natal_data = Data(
+                name="Natal",
+                lat=birth_lat,
+                lon=birth_lon,
+                utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                config=config
+            )
+            
+            # Get current location coordinates
+            current_lat = location_params.get("current_latitude") if location_params else None
+            current_lon = location_params.get("current_longitude") if location_params else None
+            
+            if current_lat is None or current_lon is None:
+                logger.info(f"No current location provided, using birth location as fallback")
+                current_lat, current_lon = birth_lat, birth_lon
+            
+            transit_data_obj = Data(
+                name="Transit",
+                lat=current_lat,
+                lon=current_lon,
+                utc_dt=transit_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                config=config
+            )
+            
+        elif chart_type == "relocation":
+            # Relocation: natal at relocated location, transit at relocated location
+            relocation_lat = location_params.get("relocation_latitude") if location_params else None
+            relocation_lon = location_params.get("relocation_longitude") if location_params else None
+            
+            if relocation_lat is None or relocation_lon is None:
+                logger.info(f"No relocation location provided, using birth location as fallback")
+                relocation_lat, relocation_lon = birth_lat, birth_lon
+            
+            natal_data = Data(
+                name="Natal",
+                lat=relocation_lat,
+                lon=relocation_lon,
+                utc_dt=birth_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                config=config
+            )
+            
+            transit_data_obj = Data(
+                name="Transit",
+                lat=relocation_lat,
+                lon=relocation_lon,
+                utc_dt=transit_utc_dt.strftime("%Y-%m-%d %H:%M"),
+                config=config
+            )
+        else:
+            raise ValueError(f"Unknown chart type: {chart_type}")
+        
+        # Initialize Zodiac service with natal data
+        zodiac = Zodiac(natal_data)
+        
+        # Get zodiac signs using the service
+        sun_sign = zodiac.get_sun_sign()
+        moon_sign = zodiac.get_lunar_sign()
+        ascendant_sign = zodiac.get_ascendant_sign()
+        chart_ruler = zodiac.get_chart_ruler()
+        
+        # Set up paths and fonts (same as original generate_chart)
+        base_path = Path(__file__).resolve().parent
+        assets_path = base_path / '../../assets'
+        font_dir = assets_path / 'fonts'
+        font_family_bold = str(font_dir / 'static' / 'Montserrat-Bold.ttf')
+        font_family_regular = str(font_dir / 'static' / 'Montserrat-Regular.ttf')
+        font = ImageFont.truetype(font_family_bold, 48)
+        
+        # Read the signs SVG template
+        signs_svg_path = assets_path / 'zodiac' / 'signs.svg'
+        with open(signs_svg_path, 'r', encoding='utf-8') as f:
+            signs_svg_content = f.read()
+        
+        # Create sun sign SVG by hiding other signs and making current sign white
+        sun_svg_content = signs_svg_content
+        for sign in ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces']:
+            if sign != sun_sign.lower():
+                sun_svg_content = sun_svg_content.replace(f'<g id="{sign}">', f'<g id="{sign}" style="display:none">')
+            else:
+                sun_svg_content = sun_svg_content.replace(f'<g id="{sign}">', f'<g id="{sign}" fill="#ffffff">')
+        
+        # Create moon sign SVG similarly
+        moon_svg_content = signs_svg_content
+        for sign in ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces']:
+            if sign != moon_sign.lower():
+                moon_svg_content = moon_svg_content.replace(f'<g id="{sign}">', f'<g id="{sign}" style="display:none">')
+            else:
+                moon_svg_content = moon_svg_content.replace(f'<g id="{sign}">', f'<g id="{sign}" fill="#ffffff">')
+        
+        # Convert SVGs to PNG
+        sun_svg = cairosvg.svg2png(bytestring=sun_svg_content.encode('utf-8'), output_width=200, output_height=200)
+        moon_svg = cairosvg.svg2png(bytestring=moon_svg_content.encode('utf-8'), output_width=200, output_height=200)
+        
+        sun_img = Image.open(BytesIO(sun_svg)).convert("RGBA")
+        moon_img = Image.open(BytesIO(moon_svg)).convert("RGBA")
+        
+        # Load template SVG (THIS IS THE KEY PART!)
+        template_path = assets_path / f'template_{template}.svg'
+        with open(template_path, 'r', encoding='utf-8') as f:
+            svg_content = f.read()
+        
+        # Safely handle user name with Turkish characters
+        first_name = user_info.get('First Name', '')
+        last_name = user_info.get('Last Name', '')
+        try:
+            user_name = f"{first_name} {last_name}".strip()
+            user_name = user_name.encode('utf-8', errors='ignore').decode('utf-8')
+        except Exception as e:
+            logger.warning(f"Error processing user name: {e}")
+            user_name = "User Name"
+        
+        # Hide data group
+        svg_content_hidden = NatalChartService.hide_data_text_elements(svg_content)
+        template_svg = cairosvg.svg2png(bytestring=svg_content_hidden.encode('utf-8'), output_width=2480, output_height=3508)
+        template_img = Image.open(BytesIO(template_svg)).convert("RGBA")
+        
+        # Create transit chart with both natal and transit data
+        transit_chart = Chart(data1=natal_data, data2=transit_data_obj, width=2250)
+        
+        # Create transit data for aspect table
+        from natal.stats import Stats
+        stats = Stats(data1=natal_data, data2=transit_data_obj)
+        cross_ref_data = stats.cross_ref
+        aspect_grid = cross_ref_data.grid
+        
+        # Get celestial body data for planet statuses
+        celestial_data = stats.celestial_body
+        
+        # Create canvas using template
+        a3_width, a3_height = 2480, 3508
+        canvas = Image.new("RGBA", (a3_width, a3_height), (255, 255, 255, 255))
+        canvas.paste(template_img, (0, 0), template_img)
+        
+        # Initialize SVG service
+        svg_paths_dir = os.path.join(assets_path, 'svg_paths')
+        SVGPathService.initialize(svg_paths_dir)
+        
+        # Get placeholder rectangles
+        rects = NatalChartService.get_placeholder_rects(svg_content, [
+            'earth', 'water', 'fire', 'air', 
+            'chart','chart-ruler','aspect',
+            'sun-sign', 'moon-sign', 'rise-sign',  
+            'birth-place', 'birth-date', 
+            'positive', 'negative',
+            'name',
+            'north','east',
+            'cardinal', 'fixed', 'mutable',
+            'qr-code',
+            'sun-icon', 'moon-icon'
+        ])
+        
+        draw = ImageDraw.Draw(canvas)
+        
+        # Place transit chart in chart placeholder
+        if 'chart' in rects:
+            chart_size = 2250
+            info = rects['chart']
+            
+            # Get chart with status indicators
+            chart_image = PlanetStatusService.get_chart_with_status(
+                natal_data, 
+                chart_size, 
+                svg_paths_dir,
+                chart=transit_chart,
+                stats=stats
+            )
+            
+            # Place the chart on canvas
+            canvas.paste(chart_image, (int(info['center_x'] - chart_size/2), int(info['center_y'] - chart_size/2)), chart_image)
+        
+        # Draw aspect matrix
+        if 'aspect' in rects:
+            info = rects['aspect']
+            AspectMatrixService.draw_aspect_matrix(ImageDraw.Draw(canvas), aspect_grid, info['center_x'], info['center_y'], svg_paths_dir)
+        
+        # Add all the text elements, zodiac signs, etc. (same as original generate_chart)
+        
+        # Birth place
+        if 'birth-place' in rects:
+            info = rects['birth-place']
+            try:
+                birth_place = user_info["Place of Birth"]
+                birth_place = birth_place.encode('utf-8', errors='ignore').decode('utf-8')
+            except Exception as e:
+                logger.warning(f"Error processing birth place: {e}")
+                birth_place = "Birth Place"
+                
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw=ImageDraw.Draw(canvas), 
+                text=birth_place, 
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'], 
+                height=info['height'], 
+                angle=info['rotation'], 
+                font=font, 
+                fill=text_color
+            )
+            if rotated is not None:
+                canvas.paste(rotated, pos, rotated)
+        
+        # Birth date
+        if 'birth-date' in rects:
+            info = rects['birth-date']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw=ImageDraw.Draw(canvas),
+                text=display_date_str,
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=info['rotation'],
+                font=font,
+                fill=text_color
+            )
+            if rotated is not None:
+                canvas.paste(rotated, pos, rotated)
+        
+        # Zodiac signs
+        font = ImageFont.truetype(font_family_bold, 36)
+        
+        if 'moon-sign' in rects:
+            info = rects['moon-sign']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw=ImageDraw.Draw(canvas),
+                text=moon_sign.upper(),
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=0,
+                font=font,
+                fill=text_color
+            )
+            if rotated is not None:
+                canvas.paste(rotated, pos, rotated)
+        
+        if 'rise-sign' in rects:
+            info = rects['rise-sign']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw=ImageDraw.Draw(canvas),
+                text=ascendant_sign.upper(),
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=0,
+                font=font,
+                fill=text_color
+            )
+            if rotated is not None:
+                canvas.paste(rotated, pos, rotated)
+        
+        if 'sun-sign' in rects:
+            info = rects['sun-sign']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw=ImageDraw.Draw(canvas),
+                text=sun_sign.upper(),
+                x=info['center_x'] - info['width']/2,
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=0,
+                font=font,
+                fill=text_color
+            )
+            if rotated is not None:
+                canvas.paste(rotated, pos, rotated)
+        
+        # Place zodiac signs in placeholders
+        if 'sun-icon' in rects:
+            info = rects['sun-icon']
+            sun_sign_img = sun_img.resize((int(info['width']), int(info['height'])), Image.LANCZOS)
+            canvas.paste(sun_sign_img, 
+                        (int(info['center_x'] - info['width']/2), 
+                         int(info['center_y'] - info['height']/2)), 
+                        sun_sign_img)
+        
+        if 'moon-icon' in rects:
+            info = rects['moon-icon']
+            moon_sign_img = moon_img.resize((int(info['width']), int(info['height'])), Image.LANCZOS)
+            canvas.paste(moon_sign_img, 
+                        (int(info['center_x'] - info['width']/2), 
+                         int(info['center_y'] - info['height']/2)), 
+                        moon_sign_img)
+        
+        # Chart ruler
+        if 'chart-ruler' in rects:
+            info = rects['chart-ruler']
+            DistributionService._draw_icon(
+                draw=ImageDraw.Draw(canvas),
+                name=chart_ruler,
+                x=int(info['center_x'] - info['width']/2),
+                y=int(info['center_y'] - info['height']/2),
+                width=info['width'],
+                height=info['height'],
+                svg_paths_dir=svg_paths_dir,
+                size=72
+            )
+        
+        # Draw element distribution
+        ElementDistributionService.draw_element_distribution(
+            draw=ImageDraw.Draw(canvas),
+            stats=stats,
+            svg_paths_dir=svg_paths_dir,
+            rects=rects
+        )
+        
+        # User name
+        font = ImageFont.truetype(font_family_bold, 54)
+        if 'name' in rects:
+            info = rects['name']
+            rotated, pos = NatalChartService._draw_rotated_text(
+                draw=ImageDraw.Draw(canvas),
+                text=user_name, 
+                x=info['center_x'] - info['width']/2, 
+                y=info['center_y'] - info['height']/2,
+                width=info['width'],
+                height=info['height'],
+                angle=0,
+                font=font,
+                fill=text_color
+            )
+            if rotated is not None:
+                canvas.paste(rotated, pos, rotated)
+        
+        # Location coordinates
+        font = ImageFont.truetype(font_family_regular, 32)
+        basic_info = stats.basic_info
+        if basic_info and basic_info.grid and len(basic_info.grid) > 1:
+            north, east = basic_info.grid[1][1].split(' ')
+            
+            if 'north' in rects:
+                info = rects['north']
+                rotated, pos = NatalChartService._draw_rotated_text(
+                    draw=ImageDraw.Draw(canvas),
+                    text=north.replace(',', ''),
+                    x=info['center_x'] - info['width']/2,
+                    y=info['center_y'] - info['height']/2,
+                    width=info['width'],
+                    height=info['height'],
+                    angle=0,
+                    font=font,
+                    fill=text_color
+                )
+                if rotated is not None:
+                    canvas.paste(rotated, pos, rotated)
+            
+            if 'east' in rects:
+                info = rects['east']
+                rotated, pos = NatalChartService._draw_rotated_text(
+                    draw=ImageDraw.Draw(canvas),
+                    text=east,
+                    x=info['center_x'] - info['width']/2,
+                    y=info['center_y'] - info['height']/2,
+                    width=info['width'],
+                    height=info['height'],
+                    angle=0,
+                    font=font,
+                    fill=text_color
+                )
+                if rotated is not None:
+                    canvas.paste(rotated, pos, rotated)
+        
+        # Modality and polarity distributions
+        font = ImageFont.truetype(font_family_bold, 36)
+        DistributionService.draw_modality_distribution(
+            draw=ImageDraw.Draw(canvas),
+            stats=stats,
+            rects=rects,
+            svg_paths_dir=svg_paths_dir
+        )
+        
+        DistributionService.draw_polarity_distribution(
+            draw=ImageDraw.Draw(canvas),
+            stats=stats,
+            rects=rects,
+            svg_paths_dir=svg_paths_dir
+        )
+        
+        # Generate and place QR code if available
+        if 'qr-code' in rects and qr_url:
+            info = rects['qr-code']
+            
+            try:
+                qr_svg = QRCodeService.generate_qr_code(
+                    url=qr_url,
+                    size=int(info['width']),
+                    fill_color="#000000",
+                    background_color="#ffffff"
+                )
+                
+                qr_png = cairosvg.svg2png(
+                    bytestring=qr_svg.encode('utf-8'),
+                    output_width=int(info['width']),
+                    output_height=int(info['height'])
+                )
+                
+                qr_img = Image.open(BytesIO(qr_png)).convert("RGBA")
+                
+                canvas.paste(
+                    qr_img,
+                    (int(info['center_x'] - info['width']/2),
+                     int(info['center_y'] - info['height']/2)),
+                    qr_img
+                )
+            except Exception as e:
+                logger.error(f"Error generating QR code: {e}")
+        
+        # Save final image
+        buf = BytesIO()
+        canvas.save(buf, format="PNG")
+        
+        logger.info(f"✅ Generated transit chart successfully for {chart_type} using template {template}")
         return buf.getvalue()
 
     @staticmethod
