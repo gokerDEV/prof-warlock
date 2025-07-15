@@ -348,8 +348,8 @@ async def get_or_generate_transit_cache(
                 today_utc_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
                 
                 # Convert to UTC if timezone is provided
-                if location_params and location_params.get("timezone"):
-                    birth_utc_dt = TimezoneUtils.convert_local_to_utc(birth_dt, location_params.get("timezone"))
+                if birth_document.get("timezone"):
+                    birth_utc_dt = TimezoneUtils.convert_local_to_utc(birth_dt, birth_document.get("timezone"))
                 else:
                     birth_utc_dt = birth_dt
                 
@@ -575,7 +575,7 @@ async def get_or_generate_transit_cache(
                 
                 # Parse dates
                 birth_dt = datetime.strptime(birth_datetime, "%d-%m-%Y %H:%M")
-                today_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
+                today_utc_dt = datetime.strptime(f"{'-'.join(today_date.split('-')[::-1])} {today_time}", "%d-%m-%Y %H:%M")
                 
                 # For relocation charts: timezone is required and represents the relocation timezone
                 # Birth time needs to be converted to UTC using the relocation timezone
@@ -584,17 +584,13 @@ async def get_or_generate_transit_cache(
                 if relocation_timezone:
                     # Convert birth time to UTC using relocation timezone
                     birth_utc_dt = TimezoneUtils.convert_local_to_utc(birth_dt, relocation_timezone)
-                    # Convert transit time to UTC using relocation timezone
-                    today_utc_dt = TimezoneUtils.convert_local_to_utc(today_dt, relocation_timezone)
                 else:
                     # This shouldn't happen since timezone is required, but fallback to original timezone
                     birth_timezone = birth_document.get("timezone")
                     if birth_timezone:
                         birth_utc_dt = TimezoneUtils.convert_local_to_utc(birth_dt, birth_timezone)
-                        today_utc_dt = TimezoneUtils.convert_local_to_utc(today_dt, birth_timezone)
                     else:
                         birth_utc_dt = birth_dt
-                        today_utc_dt = today_dt
                 
                 # Get relocation coordinates
                 relocation_lat = location_params.get("relocation_latitude") if location_params else None
