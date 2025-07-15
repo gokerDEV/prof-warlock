@@ -3988,7 +3988,7 @@
     <rect id="fire" class="st7" x="126.1" y="134.8" width="320" height="260"/>
     <rect id="air" class="st7" x="2052.8" y="144.8" width="320" height="260"/>
     <rect id="earth" class="st7" x="113.1" y="2057.5" width="320" height="260"/>
-    <rect id="water" class="st7" x="2090.8" y="2050.5" width="320" height="260"/>
+    <rect id="water" class="st7" x="2090.8" y="2040.5" width="320" height="260"/>
     <rect id="sun-sign" class="st7" x="584.7" y="2341.2" width="350" height="50"/>
     <rect id="rise-sign" class="st7" x="1067.4" y="2341.2" width="350" height="50"/>
     <rect id="moon-sign" class="st7" x="1541" y="2341.2" width="350" height="50"/>

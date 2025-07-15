@@ -311,7 +311,8 @@ async def get_or_generate_transit_cache(
         cache_query = {
             "natal_id": mongo_id,
             "type": chart_type,
-            "date": today_date
+            "date": today_date,
+            "time": today_time
         }
         
         logger.info(f"🔍 Checking transit cache for {mongo_id} type {chart_type} on {today_date}")
@@ -461,14 +462,23 @@ async def get_or_generate_transit_cache(
                 # Get current location coordinates
                 current_lat = location_params.get("current_latitude")
                 current_lon = location_params.get("current_longitude")
+                
+                # If no current coordinates provided, try to geocode from location name
                 if current_lat is None or current_lon is None:
-                    from geopy.geocoders import Nominatim
-                    geolocator = Nominatim(user_agent="prof-warlock")
-                    current_location = geolocator.geocode(location_params.get("current_location"))
-                    if current_location:
-                        current_lat, current_lon = current_location.latitude, current_location.longitude
-                    else:
-                        raise ValueError(f"Could not geocode current location: {location_params.get('current_location')}")
+                    current_location_name = location_params.get("current_location")
+                    if current_location_name:
+                        from geopy.geocoders import Nominatim
+                        geolocator = Nominatim(user_agent="prof-warlock")
+                        current_location = geolocator.geocode(current_location_name)
+                        if current_location:
+                            current_lat, current_lon = current_location.latitude, current_location.longitude
+                        else:
+                            logger.warning(f"Could not geocode current location: {current_location_name}")
+                    
+                    # If still no current coordinates, fallback to birth location
+                    if current_lat is None or current_lon is None:
+                        logger.info(f"No current location provided, using birth location as fallback")
+                        current_lat, current_lon = birth_lat, birth_lon
                 
                 # Create natal data at birth location
                 natal_data = Data(
@@ -571,14 +581,33 @@ async def get_or_generate_transit_cache(
                 # Get relocation coordinates
                 relocation_lat = location_params.get("relocation_latitude")
                 relocation_lon = location_params.get("relocation_longitude")
+                
+                # If no relocation coordinates provided, try to geocode from location name
                 if relocation_lat is None or relocation_lon is None:
-                    from geopy.geocoders import Nominatim
-                    geolocator = Nominatim(user_agent="prof-warlock")
-                    relocation_location = geolocator.geocode(location_params.get("relocation_location"))
-                    if relocation_location:
-                        relocation_lat, relocation_lon = relocation_location.latitude, relocation_location.longitude
-                    else:
-                        raise ValueError(f"Could not geocode relocation location: {location_params.get('relocation_location')}")
+                    relocation_location_name = location_params.get("relocation_location")
+                    if relocation_location_name:
+                        from geopy.geocoders import Nominatim
+                        geolocator = Nominatim(user_agent="prof-warlock")
+                        relocation_location = geolocator.geocode(relocation_location_name)
+                        if relocation_location:
+                            relocation_lat, relocation_lon = relocation_location.latitude, relocation_location.longitude
+                        else:
+                            logger.warning(f"Could not geocode relocation location: {relocation_location_name}")
+                    
+                    # If still no relocation coordinates, fallback to birth location
+                    if relocation_lat is None or relocation_lon is None:
+                        logger.info(f"No relocation location provided, using birth location as fallback")
+                        birth_lat = birth_document.get("latitude")
+                        birth_lon = birth_document.get("longitude")
+                        if birth_lat is None or birth_lon is None:
+                            from geopy.geocoders import Nominatim
+                            geolocator = Nominatim(user_agent="prof-warlock")
+                            birth_location = geolocator.geocode(birth_document.get("birth_place"))
+                            if birth_location:
+                                birth_lat, birth_lon = birth_location.latitude, birth_location.longitude
+                            else:
+                                raise ValueError(f"Could not geocode birth place: {birth_document.get('birth_place')}")
+                        relocation_lat, relocation_lon = birth_lat, birth_lon
                 
                 # Create natal data at relocated location (as if born there)
                 natal_data = Data(
@@ -645,6 +674,7 @@ async def get_or_generate_transit_cache(
             "natal_id": mongo_id,
             "type": chart_type,
             "date": today_date,
+            "time": today_time,
             "chart_data": transit_data,
             "created_at": datetime.now()
         }
@@ -1450,20 +1480,19 @@ async def get_natal_daily_image(
             birth_datetime = f"{natal_record['birth_day']:02d}-{natal_record['birth_month']:02d}-{natal_record['birth_year']} {natal_record['birth_time']}"
             birth_dt = datetime.strptime(birth_datetime, "%d-%m-%Y %H:%M")
             
-            # Parse transit date and time (default to noon for daily charts)
+            # Parse transit date and time
             transit_date = daily_record["date"]  # YYYY-MM-DD format
-            transit_time = "12:00"  # Default time for daily charts
-            transit_dt = datetime.strptime(f"{transit_date} {transit_time}", "%Y-%m-%d %H:%M")
+            transit_time = daily_record.get("time", "12:00")  # Use cached time or default to noon
+            transit_utc_dt = datetime.strptime(f"{transit_date} {transit_time}", "%Y-%m-%d %H:%M")
             
             # Convert to UTC if timezone is provided
             if natal_record.get("timezone"):
                 from pytz import timezone
                 tz = timezone(natal_record.get("timezone"))
                 birth_utc_dt = tz.localize(birth_dt).astimezone(timezone('UTC')).replace(tzinfo=None)
-                transit_utc_dt = tz.localize(transit_dt).astimezone(timezone('UTC')).replace(tzinfo=None)
             else:
                 birth_utc_dt = birth_dt
-                transit_utc_dt = transit_dt
+                
             
             # Create Data objects based on chart type
             if chart_type == "classic":

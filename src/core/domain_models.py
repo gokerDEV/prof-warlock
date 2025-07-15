@@ -185,9 +185,9 @@ class NatalTransitLocationRequest(BaseModel):
     birth_month: int
     birth_year: int
     birth_time: str  # Format: HH:MM
-    current_location: str
-    current_latitude: float
-    current_longitude: float
+    current_location: Optional[str] = None
+    current_latitude: Optional[float] = None
+    current_longitude: Optional[float] = None
     today_day: Optional[int] = None
     today_month: Optional[int] = None
     today_year: Optional[int] = None
@@ -223,9 +223,9 @@ class NatalTransitRelocationRequest(BaseModel):
     birth_month: int
     birth_year: int
     birth_time: str  # Format: HH:MM
-    relocation_location: str
-    relocation_latitude: float
-    relocation_longitude: float
+    relocation_location: Optional[str] = None
+    relocation_latitude: Optional[float] = None
+    relocation_longitude: Optional[float] = None
     timezone: str = Field(..., pattern=r'^[+-]\d{1,2}:\d{2}$')  # Format: +/-HH:MM (REQUIRED for relocation)
     today_day: Optional[int] = None
     today_month: Optional[int] = None
