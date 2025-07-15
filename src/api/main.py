@@ -1213,8 +1213,7 @@ async def get_natal_transit_location(
         location_params = {
             "current_location": request.current_location,
             "current_latitude": request.current_latitude,
-            "current_longitude": request.current_longitude,
-            "timezone": request.timezone
+            "current_longitude": request.current_longitude
         }
         
         # Get or generate transit data from cache
@@ -1427,16 +1426,20 @@ async def get_natal_daily_image(
         }
         
         # Get cached transit data (handle both chart_data and full_report fields)
-        transit_data = daily_record.get("chart_data", {})
+        cached_transit_data = daily_record.get("chart_data", {})
         location_params = daily_record.get("location_params", {})
         
         # Handle legacy records that may have full_report instead of chart_data
-        if not transit_data and "full_report" in daily_record:
+        if not cached_transit_data and "full_report" in daily_record:
             logger.warning(f"Using full_report instead of chart_data for record {daily_record['_id']}")
-            # For now, generate a basic chart without transit data
-            transit_data = {}
+            cached_transit_data = {
+                "full_report": daily_record.get("full_report", ""),
+                "sun_sign": daily_record.get("sun_sign", "unknown"),
+                "moon_sign": daily_record.get("moon_sign", "unknown"),
+                "rising_sign": daily_record.get("rising_sign", "unknown")
+            }
         
-        # Generate transit chart image based on chart type
+        # Generate transit chart image based on chart type with cached transit data
         try:
             from natal.data import Data
             from natal.chart import Chart
@@ -1473,7 +1476,7 @@ async def get_natal_daily_image(
                     config=Config()
                 )
                 
-                transit_data = Data(
+                transit_data_obj = Data(
                     name="Transit",
                     lat=natal_record.get("latitude"),
                     lon=natal_record.get("longitude"),
@@ -1495,7 +1498,7 @@ async def get_natal_daily_image(
                 current_lat = location_params.get("current_latitude", natal_record.get("latitude"))
                 current_lon = location_params.get("current_longitude", natal_record.get("longitude"))
                 
-                transit_data = Data(
+                transit_data_obj = Data(
                     name="Transit",
                     lat=current_lat,
                     lon=current_lon,
@@ -1516,7 +1519,7 @@ async def get_natal_daily_image(
                     config=Config()
                 )
                 
-                transit_data = Data(
+                transit_data_obj = Data(
                     name="Transit",
                     lat=relocation_lat,
                     lon=relocation_lon,
@@ -1528,7 +1531,7 @@ async def get_natal_daily_image(
                 raise ValueError(f"Unknown chart type: {chart_type}")
             
             # Create transit chart with both natal and transit data
-            chart = Chart(data1=natal_data, data2=transit_data, width=1600)
+            chart = Chart(data1=natal_data, data2=transit_data_obj, width=1600)
             
             # Generate SVG chart
             chart_svg = chart.svg
@@ -1541,8 +1544,48 @@ async def get_natal_daily_image(
                 output_height=int(1600 * 1.414)  # A4 aspect ratio
             )
             
+            # Add transit data annotations if available
+            if cached_transit_data:
+                from src.services.image_annotation import ImageAnnotator
+                import io
+                
+                # Create Image from bytes
+                chart_image = Image.open(io.BytesIO(chart_data_bytes))
+                
+                # Initialize annotator
+                annotator = ImageAnnotator(chart_image)
+                
+                # Prepare transit annotation text
+                transit_info = []
+                if cached_transit_data.get("sun_sign") and cached_transit_data.get("sun_sign") != "unknown":
+                    transit_info.append(f"Sun: {cached_transit_data['sun_sign']}")
+                if cached_transit_data.get("moon_sign") and cached_transit_data.get("moon_sign") != "unknown":
+                    transit_info.append(f"Moon: {cached_transit_data['moon_sign']}")
+                if cached_transit_data.get("rising_sign") and cached_transit_data.get("rising_sign") != "unknown":
+                    transit_info.append(f"Rising: {cached_transit_data['rising_sign']}")
+                
+                # Add transit info as annotation
+                if transit_info:
+                    transit_text = f"Transit Signs: {', '.join(transit_info)}"
+                    annotator.add_teacher_comment(transit_text)
+                
+                # Add chart type indicator
+                annotator.add_teacher_comment(f"Chart Type: {chart_type.capitalize()}")
+                
+                # Save annotated image
+                annotated_image = annotator.save_image()
+                
+                # Convert back to bytes
+                output = io.BytesIO()
+                annotated_image.save(output, format='PNG')
+                chart_data_bytes = output.getvalue()
+            
+            logger.info(f"✅ Generated transit chart successfully for {chart_type} with cached transit data")
+            
         except Exception as chart_error:
+            import traceback
             logger.error(f"💥 Error generating transit chart: {str(chart_error)}")
+            logger.error(f"💥 Chart error traceback: {traceback.format_exc()}")
             # Fallback to regular natal chart
             chart_data_bytes = natal_chart_service.generate_chart(
                 user_info, 
